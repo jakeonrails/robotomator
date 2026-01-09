@@ -43,6 +43,28 @@ android {
     }
 }
 
+// Configure test logging to show individual test execution
+tasks.withType<Test> {
+    testLogging {
+        events("passed", "skipped", "failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+
+        // Show test results in a clean format
+        afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ descriptor, result ->
+            if (descriptor.parent == null) { // Only print summary for the whole suite
+                println("\nTest Results: ${result.resultType}")
+                println("  Tests run: ${result.testCount}")
+                println("  Passed: ${result.successfulTestCount}")
+                println("  Failed: ${result.failedTestCount}")
+                println("  Skipped: ${result.skippedTestCount}")
+            }
+        }))
+    }
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
