@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# bin/emulator-stop - Stop all running Android emulators
+# Usage: bin/emulator-stop
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}Checking for running emulators...${NC}"
+echo ""
+
+# Find all running emulators
+EMULATORS=$(adb devices | grep "emulator-" | awk '{print $1}')
+
+if [ -z "$EMULATORS" ]; then
+    echo -e "${YELLOW}No emulators are currently running${NC}"
+    exit 0
+fi
+
+echo "Found running emulators:"
+echo "$EMULATORS"
+echo ""
+
+# Kill each emulator
+echo "$EMULATORS" | while read -r emu; do
+    echo -e "${YELLOW}Stopping $emu...${NC}"
+    adb -s "$emu" emu kill 2>/dev/null || true
+done
+
+sleep 1
+
+echo ""
+echo -e "${GREEN}✓ All emulators stopped${NC}"
+echo ""
+echo "CPU and RAM resources freed!"
