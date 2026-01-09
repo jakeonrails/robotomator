@@ -7,10 +7,13 @@ local.properties
 *.aab
 *.ap_
 *.dex
-bin/
+app/bin/
 gen/
 out/
 build/
+
+# Allow root-level bin/ directory for project scripts
+!bin/
 
 # Kotlin
 *.class

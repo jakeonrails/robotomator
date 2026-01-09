@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# bin/check - Run all checks (tests, lint, etc.)
+# Usage: bin/check
+
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}Running all checks (tests, lint, etc.)${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo ""
+
+# Run all checks
+./gradlew check --console=plain
+
+# Check exit code
+if [ $? -eq 0 ]; then
+    echo ""
+    echo -e "${GREEN}✓ All checks passed!${NC}"
+    echo ""
+
+    # Show report locations
+    echo -e "${YELLOW}Reports:${NC}"
+
+    if [ -f "app/build/reports/tests/testDebugUnitTest/index.html" ]; then
+        echo -e "  Test report:  app/build/reports/tests/testDebugUnitTest/index.html"
+    fi
+
+    if [ -f "app/build/reports/lint-results-debug.html" ]; then
+        echo -e "  Lint report:  app/build/reports/lint-results-debug.html"
+    fi
+
+    echo ""
+else
+    echo ""
+    echo -e "${RED}✗ Checks failed${NC}"
+    echo ""
+    echo -e "${YELLOW}Check the reports above for details${NC}"
+    exit 1
+fi
