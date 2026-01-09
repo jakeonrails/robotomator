@@ -1,0 +1,97 @@
+#!/bin/bash
+
+# bin/emulator - Manage Android emulators
+# Usage:
+#   bin/emulator list      - List available AVDs
+#   bin/emulator start <avd_name>  - Start an emulator
+#   bin/emulator devices   - Show connected devices
+
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Try to find Android SDK
+if [ -z "$ANDROID_HOME" ]; then
+    # Common locations
+    if [ -d "$HOME/Library/Android/sdk" ]; then
+        ANDROID_HOME="$HOME/Library/Android/sdk"
+    elif [ -d "/usr/local/share/android-sdk" ]; then
+        ANDROID_HOME="/usr/local/share/android-sdk"
+    elif [ -d "/opt/android-sdk" ]; then
+        ANDROID_HOME="/opt/android-sdk"
+    else
+        echo -e "${RED}✗ Android SDK not found${NC}"
+        echo ""
+        echo "Please set ANDROID_HOME environment variable:"
+        echo "  export ANDROID_HOME=/path/to/android/sdk"
+        echo ""
+        echo "Or install Android Studio which includes the SDK:"
+        echo "  https://developer.android.com/studio"
+        exit 1
+    fi
+    echo -e "${YELLOW}Found Android SDK at: $ANDROID_HOME${NC}"
+    echo ""
+fi
+
+EMULATOR="$ANDROID_HOME/emulator/emulator"
+AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+
+# Check if emulator exists
+if [ ! -f "$EMULATOR" ]; then
+    echo -e "${RED}✗ Emulator not found at: $EMULATOR${NC}"
+    echo ""
+    echo "Please install Android SDK Platform-Tools and Emulator"
+    exit 1
+fi
+
+# Command handling
+case "${1:-list}" in
+    list)
+        echo -e "${BLUE}Available Android Virtual Devices (AVDs):${NC}"
+        echo ""
+        "$EMULATOR" -list-avds
+        echo ""
+        echo "To start an emulator: bin/emulator start <avd_name>"
+        ;;
+
+    start)
+        if [ -z "$2" ]; then
+            echo -e "${RED}✗ Please specify AVD name${NC}"
+            echo ""
+            echo "Usage: bin/emulator start <avd_name>"
+            echo ""
+            echo "Available AVDs:"
+            "$EMULATOR" -list-avds
+            exit 1
+        fi
+
+        echo -e "${GREEN}Starting emulator: $2${NC}"
+        echo ""
+        "$EMULATOR" -avd "$2" &
+
+        echo ""
+        echo -e "${YELLOW}Waiting for device to come online...${NC}"
+        adb wait-for-device
+        echo -e "${GREEN}✓ Emulator is ready!${NC}"
+        ;;
+
+    devices)
+        echo -e "${BLUE}Connected devices/emulators:${NC}"
+        echo ""
+        adb devices -l
+        ;;
+
+    *)
+        echo "Usage: bin/emulator <command>"
+        echo ""
+        echo "Commands:"
+        echo "  list           List available AVDs"
+        echo "  start <name>   Start an emulator"
+        echo "  devices        Show connected devices"
+        ;;
+esac

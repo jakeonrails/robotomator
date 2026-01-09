@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# bin/run - Build and run the app on connected device/emulator
+# Usage: bin/run [--release]
+
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Default to debug build
+BUILD_TYPE="debug"
+GRADLE_TASK="installDebug"
+
+# Parse arguments
+if [[ "$1" == "--release" ]]; then
+    BUILD_TYPE="release"
+    GRADLE_TASK="installRelease"
+fi
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}Building and installing app (${BUILD_TYPE})${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
+echo ""
+
+# Check if device/emulator is connected
+DEVICES=$(adb devices | grep -v "List" | grep "device" | wc -l)
+
+if [ "$DEVICES" -eq 0 ]; then
+    echo -e "${RED}✗ No device or emulator connected${NC}"
+    echo ""
+    echo "Please connect a device or start an emulator:"
+    echo ""
+    echo "  List available emulators:"
+    echo "    \$ANDROID_HOME/emulator/emulator -list-avds"
+    echo ""
+    echo "  Start an emulator:"
+    echo "    \$ANDROID_HOME/emulator/emulator -avd <avd_name> &"
+    echo ""
+    echo "  Or connect a physical device via USB with USB debugging enabled"
+    echo ""
+    exit 1
+fi
+
+echo -e "${BLUE}Connected devices:${NC}"
+adb devices
+echo ""
+
+# Build and install
+./gradlew "$GRADLE_TASK" --console=plain
+
+if [ $? -eq 0 ]; then
+    echo ""
+    echo -e "${GREEN}✓ App installed successfully!${NC}"
+    echo ""
+    echo -e "${YELLOW}Launching app...${NC}"
+
+    # Launch the app
+    adb shell am start -n com.robotomator.app/.MainActivity
+
+    echo ""
+    echo -e "${GREEN}App is running!${NC}"
+    echo ""
+    echo "To view logs:"
+    echo "  adb logcat -s RobotomatorA11yService:* MainActivity:*"
+else
+    echo ""
+    echo -e "${RED}✗ Installation failed${NC}"
+    exit 1
+fi
