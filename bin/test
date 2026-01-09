@@ -9,6 +9,7 @@ set -e
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Default values
@@ -84,18 +85,41 @@ echo ""
 # Check exit code
 if [ $? -eq 0 ]; then
     echo ""
-    echo -e "${GREEN}✓ Tests passed!${NC}"
-    echo ""
 
-    # Show report location for unit tests
+    # Show report location and summary for unit tests
     if [ "$CONNECTED" = false ]; then
         # Capitalize first letter of variant for path
         VARIANT_FIRST=$(echo "${VARIANT:0:1}" | tr '[:lower:]' '[:upper:]')
         VARIANT_REST="${VARIANT:1}"
         REPORT_PATH="app/build/reports/tests/test${VARIANT_FIRST}${VARIANT_REST}UnitTest/index.html"
+
+        # Try to extract test summary from HTML report
         if [ -f "$REPORT_PATH" ]; then
+            # Parse the HTML to get test counts
+            TESTS=$(grep -oE '<div class="counter">[0-9]+</div>' "$REPORT_PATH" | head -1 | grep -oE '[0-9]+' || echo "?")
+            FAILURES=$(grep -oE '<div class="failures">[0-9]+</div>' "$REPORT_PATH" | head -1 | grep -oE '[0-9]+' || echo "0")
+
+            if [ "$TESTS" != "?" ]; then
+                echo -e "${GREEN}✓ Tests passed!${NC}"
+                echo ""
+                echo -e "${BLUE}Test Results:${NC}"
+                echo "  Tests run: $TESTS"
+                echo "  Passed: $((TESTS - FAILURES))"
+                echo "  Failed: $FAILURES"
+                echo ""
+            else
+                echo -e "${GREEN}✓ Tests passed!${NC}"
+                echo ""
+            fi
+
             echo -e "${YELLOW}Test report: $REPORT_PATH${NC}"
+        else
+            echo -e "${GREEN}✓ Tests passed!${NC}"
+            echo ""
         fi
+    else
+        echo -e "${GREEN}✓ Tests passed!${NC}"
+        echo ""
     fi
 else
     echo ""
