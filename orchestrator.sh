@@ -56,12 +56,7 @@ STEP-BY-STEP PROCESS:
 1. Read ROADMAP.md and find THE FIRST unclaimed item (no 'COMPLETED' or 'IN PROGRESS' status)
 2. Mark ONLY that ONE item as 'IN PROGRESS' in ROADMAP.md
 3. Implement that ONE feature completely
-4. Review your code against AGENT_REVIEW_CHECKLIST.md:
-   - Memory Management: Recycle all AccessibilityNodeInfo in try-finally
-   - Thread Safety: Use @Volatile for shared state
-   - Error Handling: Catch specific exceptions, not generic Exception
-   - Performance: No main thread blocking, add depth limits to recursion
-   - Code Quality: Follow Kotlin idioms, clear naming
+4. Read and review your code against AGENT_REVIEW_CHECKLIST.md before marking complete
 5. Mark ONLY that ONE item as 'COMPLETED' in ROADMAP.md
 6. STOP IMMEDIATELY - Do not look at the next item
 
@@ -82,13 +77,8 @@ ONE ITEM MEANS:
 Example: If you implement 'Priority 4: Global Actions', you are DONE.
 Do NOT continue to Priority 5, even if you have time/energy.
 
-CODE QUALITY REQUIREMENTS:
-Before marking complete, verify against AGENT_REVIEW_CHECKLIST.md:
-- All AccessibilityNodeInfo objects are recycled with try-finally
-- Shared state uses @Volatile or AtomicReference
-- Specific exception types, never generic Exception
-- No main thread blocking (use Dispatchers.IO for IPC)
-- Recursive functions have depth limits
+CODE QUALITY:
+Read AGENT_REVIEW_CHECKLIST.md and verify your code before marking complete.
 
 Do not commit or push - that's for the finalization agent.
 
@@ -116,73 +106,40 @@ REVIEW_PROMPT="You are the Review Agent. Your job is to systematically review co
 
 SYSTEMATIC REVIEW PROCESS:
 
-1. Read AGENT_REVIEW_CHECKLIST.md to understand all quality criteria
+1. Read AGENT_REVIEW_CHECKLIST.md completely to understand all quality criteria
 
-2. Review code changes against EACH checklist category:
+2. Review all code changes against EVERY checklist category in the file:
+   - Memory Management (Section 1)
+   - Thread Safety (Section 2)
+   - Error Handling (Section 3)
+   - Performance (Section 4)
+   - Security (Section 5)
+   - Code Quality (Section 6)
+   - Testing (Section 7)
+   - Spec Compliance (Section 8)
+   - Documentation (Section 9)
 
-   ✓ MEMORY MANAGEMENT (Section 1):
-     - Every AccessibilityNodeInfo has try-finally with recycle()
-     - No nodes stored in fields/collections
-     - Clear ownership documented for returned nodes
-     - Coroutines canceled when lifecycle ends
-
-   ✓ THREAD SAFETY (Section 2):
-     - Shared mutable state uses @Volatile or AtomicReference
-     - No check-then-act race conditions
-     - Compound updates are atomic
-     - Service singleton uses proper synchronization
-
-   ✓ ERROR HANDLING (Section 3):
-     - Specific exception types (IllegalStateException, SecurityException)
-     - Never catch generic Exception or Throwable
-     - All exceptions logged with context
-     - Sealed classes for result types
-
-   ✓ PERFORMANCE (Section 4):
-     - No blocking on main thread
-     - Dispatchers.IO for disk/network
-     - Recursive functions have depth limits
-     - Accessibility events filtered early
-
-   ✓ SECURITY (Section 5):
-     - Input validation on all external data
-     - No sensitive data in logs
-     - Length limits on string inputs
-
-   ✓ CODE QUALITY (Section 6):
-     - Methods < 30 lines
-     - Clear naming
-     - No magic numbers
-     - Kotlin idioms used properly
-
-   ✓ TESTING (Section 7):
-     - Happy path tested
-     - Error paths tested
-     - Edge cases covered
-     - Node recycling verified
-
-3. Fix ALL issues you find - do not leave TODOs
+3. Fix ALL issues you find - do not leave TODOs or defer fixes
 
 4. Write comprehensive tests if missing
 
 5. Run tests and verify they pass
 
-CRITICAL FIXES REQUIRED:
-- Any AccessibilityNodeInfo without try-finally → ADD IT
-- Any generic Exception catch → MAKE IT SPECIFIC
-- Any shared state without @Volatile → ADD IT
-- Any main thread blocking → MOVE TO Dispatchers.IO
-- Any recursive function without depth limit → ADD LIMIT
+IMPORTANT:
+- Use AGENT_REVIEW_CHECKLIST.md as your authoritative guide
+- Check every item in each section
+- Fix issues immediately, don't just note them
+- The checklist contains the current project standards
 
 Do not commit or push - that's for the finalization agent.
 
 OUTPUT FORMAT:
 When done, output 'REVIEW COMPLETE' followed by summary:
-- Number of issues found and fixed (by category)
+- Number of issues found and fixed (by checklist category)
 - Test coverage added
 - Build/test status
 
-Now review systematically using the checklist."
+Now review systematically using AGENT_REVIEW_CHECKLIST.md."
 
 log_info "Launching review agent..."
 if echo "$REVIEW_PROMPT" | claude --dangerously-skip-permissions --print --model sonnet; then
