@@ -13,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 
 /**
  * MainActivity - Entry point for Robotomator
@@ -157,6 +158,10 @@ class MainActivity : AppCompatActivity() {
                         break
                     }
                 }
+            } catch (e: CancellationException) {
+                // This is expected when the coroutine is cancelled (e.g., activity paused)
+                // Don't log as error - it's normal coroutine lifecycle
+                throw e  // Re-throw to properly propagate cancellation
             } catch (e: Exception) {
                 Log.e(TAG, "Error in permission monitoring", e)
             }
