@@ -31,19 +31,68 @@ echo ""
 DEVICES=$(adb devices | grep -v "List" | grep "device" | wc -l)
 
 if [ "$DEVICES" -eq 0 ]; then
-    echo -e "${RED}✗ No device or emulator connected${NC}"
+    echo -e "${YELLOW}No device or emulator connected. Starting emulator...${NC}"
     echo ""
-    echo "Please connect a device or start an emulator:"
+
+    # Try to find Android SDK
+    if [ -z "$ANDROID_HOME" ]; then
+        # Common locations
+        if [ -d "$HOME/Library/Android/sdk" ]; then
+            ANDROID_HOME="$HOME/Library/Android/sdk"
+        elif [ -d "/usr/local/share/android-sdk" ]; then
+            ANDROID_HOME="/usr/local/share/android-sdk"
+        elif [ -d "/opt/android-sdk" ]; then
+            ANDROID_HOME="/opt/android-sdk"
+        else
+            echo -e "${RED}✗ Android SDK not found${NC}"
+            echo ""
+            echo "Please either:"
+            echo "  1. Set ANDROID_HOME: export ANDROID_HOME=/path/to/android/sdk"
+            echo "  2. Connect a physical device via USB"
+            echo "  3. Install Android Studio which includes the SDK"
+            exit 1
+        fi
+    fi
+
+    EMULATOR="$ANDROID_HOME/emulator/emulator"
+
+    if [ ! -f "$EMULATOR" ]; then
+        echo -e "${RED}✗ Emulator not found at: $EMULATOR${NC}"
+        echo ""
+        echo "Please install Android Emulator or connect a physical device"
+        exit 1
+    fi
+
+    # Get list of available AVDs
+    AVDS=$("$EMULATOR" -list-avds)
+
+    if [ -z "$AVDS" ]; then
+        echo -e "${RED}✗ No Android Virtual Devices (AVDs) found${NC}"
+        echo ""
+        echo "Please create an AVD in Android Studio or connect a physical device"
+        exit 1
+    fi
+
+    # Use the first AVD
+    FIRST_AVD=$(echo "$AVDS" | head -n 1)
+
+    echo -e "${GREEN}Starting emulator: $FIRST_AVD${NC}"
     echo ""
-    echo "  List available emulators:"
-    echo "    \$ANDROID_HOME/emulator/emulator -list-avds"
+
+    # Start emulator in background
+    "$EMULATOR" -avd "$FIRST_AVD" > /dev/null 2>&1 &
+
+    echo -e "${YELLOW}Waiting for emulator to boot...${NC}"
+    adb wait-for-device
+
+    # Wait for boot to complete
+    echo -e "${YELLOW}Waiting for Android to finish booting...${NC}"
+    while [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; do
+        sleep 1
+    done
+
+    echo -e "${GREEN}✓ Emulator is ready!${NC}"
     echo ""
-    echo "  Start an emulator:"
-    echo "    \$ANDROID_HOME/emulator/emulator -avd <avd_name> &"
-    echo ""
-    echo "  Or connect a physical device via USB with USB debugging enabled"
-    echo ""
-    exit 1
 fi
 
 echo -e "${BLUE}Connected devices:${NC}"
