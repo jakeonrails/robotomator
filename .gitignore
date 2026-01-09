@@ -32,6 +32,7 @@ build/
 *.swp
 *.swo
 *~
+.vscode/settings.json
 
 # Node (for OpenSpec CLI if used locally)
 node_modules/
