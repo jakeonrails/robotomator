@@ -1,0 +1,48 @@
+# Android
+*.iml
+.gradle/
+local.properties
+.idea/
+*.apk
+*.aab
+*.ap_
+*.dex
+bin/
+gen/
+out/
+build/
+
+# Kotlin
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE
+*.swp
+*.swo
+*~
+
+# Node (for OpenSpec CLI if used locally)
+node_modules/
+
+# Environment and secrets
+.env
+.env.local
+*.key
+*.pem
+credentials.json
+
+# Logs
+*.log
+logs/
