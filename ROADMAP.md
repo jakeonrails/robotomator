@@ -159,30 +159,31 @@ The journey ahead is organized by what can be built in parallel. Within each gro
 
 *The robot learns to smile.*
 
-| Priority | Feature | What It Does | Joy Factor |
-|----------|---------|--------------|------------|
-| 1 | Permission Flow | Friendly onboarding that guides users through accessibility setup | Warm welcome |
-| 2 | Main Navigation | Bottom nav: Automations, Create, Settings | Easy to find things |
-| 3 | Empty State | Charming "no automations yet" screen with a nudge to create one | Inviting start |
-| 4 | Automations List | Show all automations with name, description, state, last run | Your collection |
-| 5 | List Actions | Tap to run, long-press for context menu (edit, shortcut, export, delete) | Quick actions |
-| 6 | Create Screen | Voice input, text input, or manual script - pick your adventure | Multiple paths |
-| 7 | AI Processing Feedback | Show what the AI is doing as it builds your automation | Transparency |
-| 8 | Clarification UI | When AI needs more info, ask nicely | Helpful dialogue |
-| 9 | Automation Detail | View and edit automation properties, inputs, and outputs | Full control |
-| 10 | Run Button | The big satisfying button that makes magic happen | The moment of joy |
-| 11 | Execution Progress | Current step, overall progress, optional screen preview | Know what's happening |
-| 12 | AITM Notification | Let users know when AI recovery kicks in | No mystery |
-| 13 | User Escalation | When AI is stumped, ask the human for help | Teamwork |
-| 14 | Completion Display | Success message with outputs and "run again" option | Celebration |
-| 15 | Failure Display | Clear error explanation with retry/edit options | Path forward |
-| 16 | Results Display | Show captured outputs with copy and share buttons | Useful data |
-| 17 | Settings Screen | API config, timeouts, privacy controls | Customization |
-| 18 | Search and Filter | Find automations when you have dozens | Scale ready |
-| 19 | Voice Recording | Animated waveforms and real-time transcription | Feels magical |
-| 20 | Loading States | Spinners and skeletons everywhere they're needed | Polish |
-| 21 | Success/Error Feedback | Snackbars and animations for every action | Responsive |
-| 22 | TalkBack Support | Full accessibility so our accessibility app is accessible (meta!) | Inclusive |
+| Priority | Feature | What It Does | Joy Factor | Status |
+|----------|---------|--------------|------------|--------|
+| 0 | Robo-Tomator Icon | Create a delightful robotic tomato mascot icon and set it as the app icon | Brand identity |
+| 1 | Permission Flow | Friendly onboarding that guides users through accessibility setup | Warm welcome | ✅ **COMPLETED** |
+| 2 | Main Navigation | Bottom nav: Automations, Create, Settings | Easy to find things | |
+| 3 | Empty State | Charming "no automations yet" screen with a nudge to create one | Inviting start | |
+| 4 | Automations List | Show all automations with name, description, state, last run | Your collection | |
+| 5 | List Actions | Tap to run, long-press for context menu (edit, shortcut, export, delete) | Quick actions | |
+| 6 | Create Screen | Voice input, text input, or manual script - pick your adventure | Multiple paths | |
+| 7 | AI Processing Feedback | Show what the AI is doing as it builds your automation | Transparency | |
+| 8 | Clarification UI | When AI needs more info, ask nicely | Helpful dialogue | |
+| 9 | Automation Detail | View and edit automation properties, inputs, and outputs | Full control | |
+| 10 | Run Button | The big satisfying button that makes magic happen | The moment of joy | |
+| 11 | Execution Progress | Current step, overall progress, optional screen preview | Know what's happening | |
+| 12 | AITM Notification | Let users know when AI recovery kicks in | No mystery | |
+| 13 | User Escalation | When AI is stumped, ask the human for help | Teamwork | |
+| 14 | Completion Display | Success message with outputs and "run again" option | Celebration | |
+| 15 | Failure Display | Clear error explanation with retry/edit options | Path forward | |
+| 16 | Results Display | Show captured outputs with copy and share buttons | Useful data | |
+| 17 | Settings Screen | API config, timeouts, privacy controls | Customization | |
+| 18 | Search and Filter | Find automations when you have dozens | Scale ready | |
+| 19 | Voice Recording | Animated waveforms and real-time transcription | Feels magical | |
+| 20 | Loading States | Spinners and skeletons everywhere they're needed | Polish | |
+| 21 | Success/Error Feedback | Snackbars and animations for every action | Responsive | |
+| 22 | TalkBack Support | Full accessibility so our accessibility app is accessible (meta!) | Inclusive | |
 
 ### Track D2: Security & Privacy (Advanced)
 
