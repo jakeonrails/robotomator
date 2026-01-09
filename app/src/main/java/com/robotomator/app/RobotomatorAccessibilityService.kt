@@ -28,10 +28,23 @@ class RobotomatorAccessibilityService : AccessibilityService() {
         @Volatile
         var isServiceConnected = false
             private set
+
+        /**
+         * Reference to the active service instance.
+         * Used by other components to invoke actions on the service.
+         */
+        @Volatile
+        private var instance: RobotomatorAccessibilityService? = null
+
+        /**
+         * Gets the active service instance if connected.
+         */
+        fun getInstance(): RobotomatorAccessibilityService? = instance
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         isServiceConnected = true
         Log.i(TAG, "Robotomator Accessibility Service connected!")
         Log.i(TAG, "Service info: ${serviceInfo}")
@@ -61,6 +74,7 @@ class RobotomatorAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        instance = null
         isServiceConnected = false
         Log.i(TAG, "Robotomator Accessibility Service disconnected")
         super.onDestroy()
@@ -72,17 +86,518 @@ class RobotomatorAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
+        instance = null
         isServiceConnected = false
         Log.i(TAG, "Service unbound")
         return super.onUnbind(intent)
     }
 
+    // ===== Global Actions API =====
+
+    /**
+     * Represents the available global actions that can be performed.
+     */
+    enum class GlobalAction(val actionId: Int) {
+        /** Navigate back - equivalent to pressing the back button */
+        BACK(GLOBAL_ACTION_BACK),
+
+        /** Navigate to home screen - equivalent to pressing the home button */
+        HOME(GLOBAL_ACTION_HOME),
+
+        /** Open recent apps/multitasking view - equivalent to pressing recents button */
+        RECENTS(GLOBAL_ACTION_RECENTS),
+
+        /** Open notification shade - pull down notifications */
+        NOTIFICATIONS(GLOBAL_ACTION_NOTIFICATIONS),
+
+        /** Open quick settings panel */
+        QUICK_SETTINGS(GLOBAL_ACTION_QUICK_SETTINGS),
+
+        /** Open power dialog - long press power button equivalent */
+        POWER_DIALOG(GLOBAL_ACTION_POWER_DIALOG);
+
+        companion object {
+            /**
+             * Gets a GlobalAction by its actionId, or null if not found.
+             */
+            fun fromActionId(actionId: Int): GlobalAction? =
+                values().find { it.actionId == actionId }
+        }
+    }
+
+    /**
+     * Result of attempting to perform a global action.
+     */
+    sealed class GlobalActionResult {
+        /** Action was successfully performed */
+        object Success : GlobalActionResult()
+
+        /** Action failed - service not connected */
+        object ServiceNotConnected : GlobalActionResult()
+
+        /** Action failed - system denied the action */
+        data class SystemDenied(val action: GlobalAction) : GlobalActionResult()
+
+        /** Action failed - unknown error */
+        data class Error(val action: GlobalAction, val message: String) : GlobalActionResult()
+    }
+
+    /**
+     * Performs a global action.
+     *
+     * @param action The global action to perform
+     * @return Result indicating success or failure
+     */
+    fun performGlobalAction(action: GlobalAction): GlobalActionResult {
+        if (!isServiceConnected) {
+            Log.w(TAG, "Cannot perform global action ${action.name}: Service not connected")
+            return GlobalActionResult.ServiceNotConnected
+        }
+
+        return try {
+            val success = performGlobalAction(action.actionId)
+            if (success) {
+                Log.d(TAG, "Successfully performed global action: ${action.name}")
+                GlobalActionResult.Success
+            } else {
+                Log.w(TAG, "System denied global action: ${action.name}")
+                GlobalActionResult.SystemDenied(action)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error performing global action ${action.name}: ${e.message}", e)
+            GlobalActionResult.Error(action, e.message ?: "Unknown error")
+        }
+    }
+
+    // ===== Element Interactions API =====
+
+    /**
+     * Result of attempting to find an element.
+     */
+    sealed class FindElementResult {
+        /** Element was found */
+        data class Found(val node: android.view.accessibility.AccessibilityNodeInfo) : FindElementResult()
+
+        /** Element was not found */
+        object NotFound : FindElementResult()
+
+        /** Service not connected */
+        object ServiceNotConnected : FindElementResult()
+
+        /** Error occurred while searching */
+        data class Error(val message: String) : FindElementResult()
+    }
+
+    /**
+     * Simple element selector for finding UI elements.
+     * In future iterations, this will be expanded to support CSS-like selectors.
+     */
+    data class ElementSelector(
+        val text: String? = null,
+        val resourceId: String? = null,
+        val className: String? = null,
+        val contentDescription: String? = null
+    ) {
+        init {
+            require(text != null || resourceId != null || className != null || contentDescription != null) {
+                "At least one selector criterion must be provided"
+            }
+        }
+    }
+
+    /**
+     * Result of attempting to interact with an element.
+     */
+    sealed class InteractionResult {
+        /** Interaction was successful */
+        object Success : InteractionResult()
+
+        /** Element not found */
+        object ElementNotFound : InteractionResult()
+
+        /** Element found but action failed */
+        data class ActionFailed(val reason: String) : InteractionResult()
+
+        /** Service not connected */
+        object ServiceNotConnected : InteractionResult()
+
+        /** Error occurred */
+        data class Error(val message: String) : InteractionResult()
+    }
+
+    /**
+     * Scroll direction for scroll operations.
+     */
+    enum class ScrollDirection {
+        UP, DOWN, LEFT, RIGHT, FORWARD, BACKWARD
+    }
+
+    /**
+     * Finds an element matching the given selector.
+     *
+     * @param selector The selector criteria
+     * @return Result containing the found node or error
+     */
+    fun findElement(selector: ElementSelector): FindElementResult {
+        if (!isServiceConnected) {
+            Log.w(TAG, "Cannot find element: Service not connected")
+            return FindElementResult.ServiceNotConnected
+        }
+
+        return try {
+            val rootNode = rootInActiveWindow
+            if (rootNode == null) {
+                Log.w(TAG, "Cannot find element: No active window")
+                return FindElementResult.NotFound
+            }
+
+            val result = findElementRecursive(rootNode, selector)
+            rootNode.recycle()
+
+            if (result != null) {
+                Log.d(TAG, "Found element matching selector: $selector")
+                FindElementResult.Found(result)
+            } else {
+                Log.d(TAG, "Element not found for selector: $selector")
+                FindElementResult.NotFound
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error finding element: ${e.message}", e)
+            FindElementResult.Error(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * Recursively searches for an element matching the selector.
+     *
+     * IMPORTANT: The caller is responsible for recycling the returned node.
+     * All other nodes are recycled internally.
+     */
+    private fun findElementRecursive(
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        selector: ElementSelector
+    ): android.view.accessibility.AccessibilityNodeInfo? {
+        // Check if current node matches
+        if (matchesSelector(node, selector)) {
+            return node
+        }
+
+        // Search children
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findElementRecursive(child, selector)
+            if (result != null) {
+                // Found a match in the subtree
+                // If the result is the child itself, return it without recycling
+                // Otherwise, recycle the child as we're returning a deeper node
+                if (child != result) {
+                    child.recycle()
+                }
+                return result
+            }
+            // No match found in this subtree, recycle the child
+            child.recycle()
+        }
+
+        return null
+    }
+
+    /**
+     * Checks if a node matches the selector criteria.
+     * All specified selector criteria must match for the method to return true.
+     */
+    private fun matchesSelector(
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        selector: ElementSelector
+    ): Boolean {
+        // Check text criterion
+        if (selector.text != null) {
+            val nodeText = node.text?.toString()
+            if (nodeText != selector.text) {
+                return false
+            }
+        }
+
+        // Check resource ID criterion
+        if (selector.resourceId != null) {
+            val nodeResourceId = node.viewIdResourceName
+            if (nodeResourceId != selector.resourceId) {
+                return false
+            }
+        }
+
+        // Check class name criterion
+        if (selector.className != null) {
+            val nodeClassName = node.className?.toString()
+            if (nodeClassName != selector.className) {
+                return false
+            }
+        }
+
+        // Check content description criterion
+        if (selector.contentDescription != null) {
+            val nodeContentDesc = node.contentDescription?.toString()
+            if (nodeContentDesc != selector.contentDescription) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    /**
+     * Performs a tap/click action on an element.
+     *
+     * @param selector The selector to find the element
+     * @return Result indicating success or failure
+     */
+    fun performTap(selector: ElementSelector): InteractionResult {
+        if (!isServiceConnected) {
+            Log.w(TAG, "Cannot perform tap: Service not connected")
+            return InteractionResult.ServiceNotConnected
+        }
+
+        return when (val findResult = findElement(selector)) {
+            is FindElementResult.Found -> {
+                try {
+                    val success = findResult.node.performAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                    )
+                    findResult.node.recycle()
+
+                    if (success) {
+                        Log.d(TAG, "Successfully tapped element: $selector")
+                        InteractionResult.Success
+                    } else {
+                        Log.w(TAG, "Failed to tap element: $selector")
+                        InteractionResult.ActionFailed("Click action returned false")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error tapping element: ${e.message}", e)
+                    InteractionResult.Error(e.message ?: "Unknown error")
+                }
+            }
+            is FindElementResult.NotFound -> {
+                Log.w(TAG, "Cannot tap: Element not found for selector: $selector")
+                InteractionResult.ElementNotFound
+            }
+            is FindElementResult.ServiceNotConnected -> InteractionResult.ServiceNotConnected
+            is FindElementResult.Error -> InteractionResult.Error(findResult.message)
+        }
+    }
+
+    /**
+     * Performs a long press action on an element.
+     *
+     * @param selector The selector to find the element
+     * @return Result indicating success or failure
+     */
+    fun performLongPress(selector: ElementSelector): InteractionResult {
+        if (!isServiceConnected) {
+            Log.w(TAG, "Cannot perform long press: Service not connected")
+            return InteractionResult.ServiceNotConnected
+        }
+
+        return when (val findResult = findElement(selector)) {
+            is FindElementResult.Found -> {
+                try {
+                    val success = findResult.node.performAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_LONG_CLICK
+                    )
+                    findResult.node.recycle()
+
+                    if (success) {
+                        Log.d(TAG, "Successfully long pressed element: $selector")
+                        InteractionResult.Success
+                    } else {
+                        Log.w(TAG, "Failed to long press element: $selector")
+                        InteractionResult.ActionFailed("Long click action returned false")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error long pressing element: ${e.message}", e)
+                    InteractionResult.Error(e.message ?: "Unknown error")
+                }
+            }
+            is FindElementResult.NotFound -> {
+                Log.w(TAG, "Cannot long press: Element not found for selector: $selector")
+                InteractionResult.ElementNotFound
+            }
+            is FindElementResult.ServiceNotConnected -> InteractionResult.ServiceNotConnected
+            is FindElementResult.Error -> InteractionResult.Error(findResult.message)
+        }
+    }
+
+    /**
+     * Types text into an element (must be focusable/editable).
+     *
+     * @param selector The selector to find the element
+     * @param text The text to type
+     * @return Result indicating success or failure
+     */
+    fun performType(selector: ElementSelector, text: String): InteractionResult {
+        if (!isServiceConnected) {
+            Log.w(TAG, "Cannot perform type: Service not connected")
+            return InteractionResult.ServiceNotConnected
+        }
+
+        return when (val findResult = findElement(selector)) {
+            is FindElementResult.Found -> {
+                try {
+                    val node = findResult.node
+
+                    // First, focus the element
+                    val focusSuccess = node.performAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_FOCUS
+                    )
+
+                    if (!focusSuccess) {
+                        node.recycle()
+                        Log.w(TAG, "Failed to focus element for typing: $selector")
+                        return InteractionResult.ActionFailed("Could not focus element")
+                    }
+
+                    // Then, set the text
+                    val arguments = android.os.Bundle().apply {
+                        putCharSequence(
+                            android.view.accessibility.AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                            text
+                        )
+                    }
+
+                    val success = node.performAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT,
+                        arguments
+                    )
+                    node.recycle()
+
+                    if (success) {
+                        Log.d(TAG, "Successfully typed text into element: $selector")
+                        InteractionResult.Success
+                    } else {
+                        Log.w(TAG, "Failed to type text into element: $selector")
+                        InteractionResult.ActionFailed("Set text action returned false")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error typing into element: ${e.message}", e)
+                    InteractionResult.Error(e.message ?: "Unknown error")
+                }
+            }
+            is FindElementResult.NotFound -> {
+                Log.w(TAG, "Cannot type: Element not found for selector: $selector")
+                InteractionResult.ElementNotFound
+            }
+            is FindElementResult.ServiceNotConnected -> InteractionResult.ServiceNotConnected
+            is FindElementResult.Error -> InteractionResult.Error(findResult.message)
+        }
+    }
+
+    /**
+     * Performs a scroll action on an element or the screen.
+     *
+     * @param direction The direction to scroll
+     * @param selector Optional selector to find a specific scrollable element.
+     *                 If null, scrolls the first scrollable element in the active window.
+     * @return Result indicating success or failure
+     */
+    fun performScroll(
+        direction: ScrollDirection,
+        selector: ElementSelector? = null
+    ): InteractionResult {
+        if (!isServiceConnected) {
+            Log.w(TAG, "Cannot perform scroll: Service not connected")
+            return InteractionResult.ServiceNotConnected
+        }
+
+        return try {
+            val node = if (selector != null) {
+                when (val findResult = findElement(selector)) {
+                    is FindElementResult.Found -> findResult.node
+                    is FindElementResult.NotFound -> {
+                        Log.w(TAG, "Cannot scroll: Element not found for selector: $selector")
+                        return InteractionResult.ElementNotFound
+                    }
+                    is FindElementResult.ServiceNotConnected -> return InteractionResult.ServiceNotConnected
+                    is FindElementResult.Error -> return InteractionResult.Error(findResult.message)
+                }
+            } else {
+                // Find first scrollable element
+                val rootNode = rootInActiveWindow
+                if (rootNode == null) {
+                    Log.w(TAG, "Cannot scroll: No active window")
+                    return InteractionResult.ElementNotFound
+                }
+                val scrollable = findFirstScrollable(rootNode)
+                rootNode.recycle()
+
+                if (scrollable == null) {
+                    Log.w(TAG, "Cannot scroll: No scrollable element found")
+                    return InteractionResult.ElementNotFound
+                }
+                scrollable
+            }
+
+            val action = when (direction) {
+                ScrollDirection.UP, ScrollDirection.BACKWARD ->
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                ScrollDirection.DOWN, ScrollDirection.FORWARD ->
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                ScrollDirection.LEFT ->
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                ScrollDirection.RIGHT ->
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+            }
+
+            val success = node.performAction(action)
+            node.recycle()
+
+            if (success) {
+                Log.d(TAG, "Successfully scrolled $direction")
+                InteractionResult.Success
+            } else {
+                Log.w(TAG, "Failed to scroll $direction")
+                InteractionResult.ActionFailed("Scroll action returned false")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error scrolling: ${e.message}", e)
+            InteractionResult.Error(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * Finds the first scrollable element in the node tree.
+     *
+     * IMPORTANT: The caller is responsible for recycling the returned node.
+     * All other nodes are recycled internally.
+     */
+    private fun findFirstScrollable(
+        node: android.view.accessibility.AccessibilityNodeInfo
+    ): android.view.accessibility.AccessibilityNodeInfo? {
+        if (node.isScrollable) {
+            return node
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = findFirstScrollable(child)
+            if (result != null) {
+                // Found a scrollable element in the subtree
+                // If the result is the child itself, return it without recycling
+                // Otherwise, recycle the child as we're returning a deeper node
+                if (child != result) {
+                    child.recycle()
+                }
+                return result
+            }
+            // No scrollable element found in this subtree, recycle the child
+            child.recycle()
+        }
+
+        return null
+    }
+
     // TODO: Future methods to be implemented:
-    // - performTap(selector: ElementSelector)
-    // - performType(selector: ElementSelector, text: String)
-    // - performScroll(direction: ScrollDirection)
     // - getScreenRepresentation(): ScreenRepresentation
-    // - performGlobalAction(action: GlobalAction)
-    // - findElement(selector: ElementSelector): AccessibilityNodeInfo?
     // - waitForElement(selector: ElementSelector, timeout: Duration): Boolean
+    // - performSwipe(from: Point, to: Point)
+    // - getElementBounds(selector: ElementSelector): Rect?
 }

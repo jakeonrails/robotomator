@@ -21,8 +21,8 @@ The journey ahead is organized by what can be built in parallel. Within each gro
 | 1 | Service Registration | Register as an Android AccessibilityService so the system knows we exist | "It's alive!" moment | ✅ **COMPLETED** |
 | 2 | Permission Detection | Know when we have the golden ticket (accessibility enabled) or not | No more guessing | ✅ **COMPLETED** |
 | 3 | Permission Request Flow | Kindly guide users through enabling permissions without making them feel like they're defusing a bomb | Smooth onboarding | ✅ **COMPLETED** |
-| 4 | Global Actions | Back, home, recents, notifications - the big red buttons of Android | Instant power |
-| 5 | Element Interactions | Tap, type, scroll, long press - teach our robot to poke things properly | The fun begins |
+| 4 | Global Actions | Back, home, recents, notifications - the big red buttons of Android | Instant power | ✅ **COMPLETED** |
+| 5 | Element Interactions | Tap, type, scroll, long press - teach our robot to poke things properly | The fun begins | ✅ **COMPLETED** |
 | 6 | Screen Content Reading | Traverse the accessibility node tree and capture everything we see | Robot vision |
 | 7 | Event Monitoring | Detect when the screen changes so we're never caught off guard | Always aware |
 | 8 | App Launching | Start apps by package name because robots love precision | App summoning |

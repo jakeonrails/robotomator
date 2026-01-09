@@ -17,11 +17,13 @@ AI-powered Android automation platform. Describe automations in natural language
 
 ## Status
 
-**Current Progress**: Group A (The Foundation) - Items 1-3/9 Complete
+**Current Progress**: Group A (The Foundation) - Items 1-5/9 Complete
 
 ✅ Service Registration - AccessibilityService is registered and ready to connect
 ✅ Permission Detection - Can detect if accessibility service is enabled
 ✅ Permission Request Flow - Complete UI for guiding users through permission setup
+✅ Global Actions - Back, home, recents, notifications, quick settings, and power dialog
+✅ Element Interactions - Tap, type, scroll, long press, and swipe gestures
 
 See `ROADMAP.md` for the complete development plan.
 
@@ -69,7 +71,7 @@ app/src/main/
 
 ## Implementation Notes
 
-### Group A: Foundation (Items 1-3 Complete)
+### Group A: Foundation (Items 1-5 Complete)
 
 #### 1. Service Registration (Completed)
 
@@ -108,6 +110,36 @@ Key files:
 - `MainActivity.kt` at app/src/main/java/com/robotomator/app/MainActivity.kt:1
 - `activity_main.xml` at app/src/main/res/layout/activity_main.xml:1
 
+#### 4. Global Actions (Completed)
+
+The accessibility service now supports all major global navigation actions:
+
+- `BACK` - Navigate back (back button)
+- `HOME` - Go to home screen
+- `RECENTS` - Open recent apps/multitasking
+- `NOTIFICATIONS` - Open notification shade
+- `QUICK_SETTINGS` - Open quick settings panel
+- `POWER_DIALOG` - Show power dialog
+
+Each action returns a typed result indicating success or specific failure reasons (service not connected, system denied, etc.).
+
+Key implementation: `RobotomatorAccessibilityService.kt` at app/src/main/java/com/robotomator/app/RobotomatorAccessibilityService.kt:95
+
+#### 5. Element Interactions (Completed)
+
+Full support for interacting with UI elements through the accessibility node tree:
+
+- **Click Actions**: `tap()`, `longPress()` with customizable durations
+- **Text Input**: `typeText()` with focus management and clipboard support
+- **Scrolling**: `scrollForward()`, `scrollBackward()`, directional scrolling
+- **Gestures**: `swipe()` with configurable direction, duration, and distance
+- **Element Finding**: Robust selectors by text, ID, content description, or custom predicates
+- **Result Tracking**: Detailed success/failure reporting for each action
+
+All interactions include proper error handling, node recycling to prevent memory leaks, and configurable timeouts.
+
+Key implementation: `RobotomatorAccessibilityService.kt` at app/src/main/java/com/robotomator/app/RobotomatorAccessibilityService.kt:189
+
 ### Testing
 
 Comprehensive test coverage includes:
@@ -115,6 +147,8 @@ Comprehensive test coverage includes:
 - 8 instrumented tests for permission utilities
 - 10 instrumented tests for main activity UI
 - 3 service lifecycle documentation tests
+- 227 lines of global actions tests (6 test cases)
+- 526 lines of element interaction tests (comprehensive coverage)
 
 See `TEST_REVIEW.md` for complete test documentation.
 

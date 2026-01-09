@@ -149,6 +149,7 @@ data class PermissionStatus(
     fun getStatusDescription(): String = when {
         isFullyOperational -> "Fully operational - ready to automate!"
         isWaitingForConnection -> "Permission granted, waiting for service to connect"
+        !isEnabled && isServiceConnected -> "Unknown state (enabled=$isEnabled, connected=$isServiceConnected)"
         needsPermission -> "Accessibility permission not granted"
         else -> "Unknown state (enabled=$isEnabled, connected=$isServiceConnected)"
     }
