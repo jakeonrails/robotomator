@@ -1,3 +1,9 @@
+# Robotomator
+
+AI-powered Android automation platform. Users describe automations in natural language, and the AI generates executable scripts using Android Accessibility APIs.
+
+See `openspec/project.md` for full project context and conventions.
+
 <!-- OPENSPEC:START -->
 # OpenSpec Instructions
 
