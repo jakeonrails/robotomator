@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+    Backup configuration for Android versions before 12.
+    Exclude sensitive automation data from backups for privacy.
+    -->
+    <exclude domain="database" path="automations.db" />
+    <exclude domain="database" path="automations.db-journal" />
+    <exclude domain="sharedpref" path="api_keys.xml" />
+</full-backup-content>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/accessibility_service_description"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:notificationTimeout="100"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true" />
+
+<!--
+Configuration explanation:
+
+accessibilityEventTypes="typeAllMask"
+- Receive all types of accessibility events (window state changes, content changes, etc.)
+- This allows us to monitor screen changes and detect when UI elements appear/disappear
+
+accessibilityFlags:
+- flagDefault: Standard service behavior
+- flagRetrieveInteractiveWindows: Access to multiple windows (dialogs, overlays, etc.)
+- flagReportViewIds: Include resource IDs in node info (critical for stable selectors)
+
+accessibilityFeedbackType="feedbackGeneric"
+- Generic feedback type (we're an automation tool, not providing specific accessibility feedback)
+
+notificationTimeout="100"
+- Minimum time (ms) between events of same type
+- Set low to catch rapid UI changes
+
+canRetrieveWindowContent="true"
+- Essential: Allows reading the accessibility node tree to see screen content
+
+canPerformGestures="true"
+- Essential: Allows programmatic touch gestures (tap, swipe, etc.)
+- Required for Android 7.0+ (API 24+) gesture-based interactions
+-->

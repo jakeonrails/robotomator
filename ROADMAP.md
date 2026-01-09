@@ -18,9 +18,9 @@ The journey ahead is organized by what can be built in parallel. Within each gro
 
 | Priority | Feature | What It Does | Joy Factor | Status |
 |----------|---------|--------------|------------|--------|
-| 1 | Service Registration | Register as an Android AccessibilityService so the system knows we exist | "It's alive!" moment | **IN PROGRESS** |
-| 2 | Permission Detection | Know when we have the golden ticket (accessibility enabled) or not | No more guessing |
-| 3 | Permission Request Flow | Kindly guide users through enabling permissions without making them feel like they're defusing a bomb | Smooth onboarding |
+| 1 | Service Registration | Register as an Android AccessibilityService so the system knows we exist | "It's alive!" moment | ✅ **COMPLETED** |
+| 2 | Permission Detection | Know when we have the golden ticket (accessibility enabled) or not | No more guessing | ✅ **COMPLETED** |
+| 3 | Permission Request Flow | Kindly guide users through enabling permissions without making them feel like they're defusing a bomb | Smooth onboarding | ✅ **COMPLETED** |
 | 4 | Global Actions | Back, home, recents, notifications - the big red buttons of Android | Instant power |
 | 5 | Element Interactions | Tap, type, scroll, long press - teach our robot to poke things properly | The fun begins |
 | 6 | Screen Content Reading | Traverse the accessibility node tree and capture everything we see | Robot vision |

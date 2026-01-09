@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Robotomator</string>
+
+    <!-- Accessibility Service -->
+    <string name="accessibility_service_description">Robotomator needs accessibility permissions to automate tasks on your phone. This allows the app to read screen content, tap buttons, type text, and navigate between apps on your behalf.\n\nYour privacy is important: Robotomator only acts when you explicitly run an automation. Screen content is processed locally and only sent to AI services with your consent.</string>
+
+    <!-- Service Labels -->
+    <string name="service_label">Robotomator Automation</string>
+
+    <!-- Permission Request Flow -->
+    <string name="permission_needed_title">Welcome to Robotomator</string>
+    <string name="permission_needed_explanation">To automate tasks on your phone, Robotomator needs accessibility permission. This allows the app to read screens, tap buttons, and navigate apps on your behalf.\n\nTap the button below to open Settings, then find and enable \"Robotomator Automation\".</string>
+    <string name="permission_button_open_settings">Open Accessibility Settings</string>
+
+    <string name="permission_connecting_title">Almost Ready...</string>
+    <string name="permission_connecting_explanation">Thank you! The accessibility service is starting up. This usually takes just a moment.</string>
+
+    <string name="permission_ready_title">You\'re All Set!</string>
+    <string name="permission_ready_explanation">Robotomator is ready to automate tasks on your phone. The main automation interface will be available soon.</string>
+
+    <string name="permission_privacy_notice">Your privacy matters: Robotomator only acts when you run an automation. Screen content is processed locally and only sent to AI services with your explicit consent.</string>
+</resources>
