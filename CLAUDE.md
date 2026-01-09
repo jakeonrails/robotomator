@@ -4,6 +4,19 @@ AI-powered Android automation platform. Users describe automations in natural la
 
 See `openspec/project.md` for full project context and conventions.
 
+## Code Quality Requirements
+
+**After completing any coding task, review your changes using `AGENT_REVIEW_CHECKLIST.md`.**
+
+Critical requirements for this codebase:
+1. **Always recycle AccessibilityNodeInfo** objects using try-finally
+2. **Use atomic state updates** for the singleton service pattern
+3. **Never block the main thread** - use `Dispatchers.IO` for IPC
+4. **Add depth limits** to recursive tree traversal
+5. **Catch specific exceptions**, not generic `Exception`
+
+See `TECH_DEBT_REPORT.md` for known issues and remediation priorities.
+
 <!-- OPENSPEC:START -->
 # OpenSpec Instructions
 
