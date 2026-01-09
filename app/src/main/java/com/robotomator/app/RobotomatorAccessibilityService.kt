@@ -63,10 +63,14 @@ class RobotomatorAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
-        // Log accessibility events for debugging
-        // In future iterations, this will feed into our screen monitoring system
-        Log.d(TAG, "Accessibility event received: type=${event.eventType}, " +
-                "class=${event.className}, package=${event.packageName}")
+        // Log accessibility events for debugging (don't log event text to avoid PII exposure)
+        if (Log.isLoggable(TAG, Log.DEBUG)) {
+            Log.d(TAG, "Accessibility event received: type=${event.eventType}, " +
+                    "class=${event.className}, package=${event.packageName}")
+        }
+
+        // Notify listeners about this event
+        notifyListeners(event)
 
         // TODO: Future iterations will:
         // - Build and cache screen representations
@@ -84,6 +88,7 @@ class RobotomatorAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        clearAllListeners()
         instanceRef.set(null)
         Log.i(TAG, "Robotomator Accessibility Service disconnected")
         super.onDestroy()
@@ -95,6 +100,7 @@ class RobotomatorAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
+        clearAllListeners()
         instanceRef.set(null)
         Log.i(TAG, "Service unbound")
         return super.onUnbind(intent)
@@ -777,6 +783,215 @@ class RobotomatorAccessibilityService : AccessibilityService() {
             children = children,
             depth = depth
         )
+    }
+
+    // ===== Event Monitoring API =====
+
+    /**
+     * Types of screen events that can be monitored.
+     */
+    enum class ScreenEventType {
+        /** Active window changed (app switch, dialog open/close) */
+        WINDOW_CHANGE,
+
+        /** Content within the current window changed */
+        CONTENT_CHANGE,
+
+        /** Any event (no filtering) */
+        ALL
+    }
+
+    /**
+     * Represents a screen change event.
+     *
+     * @property eventType The type of event
+     * @property packageName The package name of the app where the event occurred
+     * @property windowTitle The title of the window (if available)
+     * @property timestamp When the event occurred
+     * @property accessibilityEventType The raw Android accessibility event type
+     * @property additionalInfo Additional context about what changed
+     */
+    data class ScreenEvent(
+        val eventType: ScreenEventType,
+        val packageName: String?,
+        val windowTitle: String?,
+        val timestamp: Long = System.currentTimeMillis(),
+        val accessibilityEventType: Int,
+        val additionalInfo: String? = null
+    )
+
+    /**
+     * Listener interface for receiving screen events.
+     */
+    fun interface ScreenEventListener {
+        /**
+         * Called when a screen event occurs.
+         *
+         * IMPORTANT: This is called on the main thread. Keep processing fast or
+         * delegate to a background thread to avoid blocking the accessibility service.
+         *
+         * @param event The screen event
+         */
+        fun onScreenEvent(event: ScreenEvent)
+    }
+
+    /**
+     * Filter criteria for screen events.
+     */
+    data class EventFilter(
+        val eventTypes: Set<ScreenEventType> = setOf(ScreenEventType.ALL),
+        val packageNames: Set<String> = emptySet() // Empty = all packages
+    ) {
+        /**
+         * Checks if this filter matches the given event.
+         */
+        fun matches(event: ScreenEvent): Boolean {
+            // Check event type
+            if (!eventTypes.contains(ScreenEventType.ALL) && !eventTypes.contains(event.eventType)) {
+                return false
+            }
+
+            // Check package name
+            if (packageNames.isNotEmpty()) {
+                if (event.packageName == null || !packageNames.contains(event.packageName)) {
+                    return false
+                }
+            }
+
+            return true
+        }
+    }
+
+    /**
+     * Represents a registered event listener with its filter.
+     */
+    private data class RegisteredListener(
+        val listener: ScreenEventListener,
+        val filter: EventFilter
+    )
+
+    /**
+     * Thread-safe list of registered listeners.
+     * We use CopyOnWriteArrayList for thread-safety without explicit synchronization,
+     * as reads are frequent but writes (add/remove listener) are rare.
+     */
+    private val listeners = java.util.concurrent.CopyOnWriteArrayList<RegisteredListener>()
+
+    /**
+     * Registers a listener to receive screen events.
+     *
+     * @param listener The listener to register
+     * @param filter Optional filter to limit which events are received (default: all events)
+     * @return A subscription that can be used to unregister the listener
+     */
+    fun addEventListener(
+        listener: ScreenEventListener,
+        filter: EventFilter = EventFilter()
+    ): EventSubscription {
+        val registered = RegisteredListener(listener, filter)
+        listeners.add(registered)
+
+        Log.d(TAG, "Event listener registered with filter: $filter")
+
+        return object : EventSubscription {
+            override fun unsubscribe() {
+                val removed = listeners.remove(registered)
+                if (removed) {
+                    Log.d(TAG, "Event listener unregistered")
+                }
+            }
+        }
+    }
+
+    /**
+     * Subscription handle for event listeners.
+     * Call unsubscribe() to stop receiving events.
+     */
+    interface EventSubscription {
+        fun unsubscribe()
+    }
+
+    /**
+     * Notifies all registered listeners about an accessibility event.
+     * This method is called from onAccessibilityEvent on the main thread.
+     */
+    private fun notifyListeners(event: AccessibilityEvent) {
+        if (listeners.isEmpty()) {
+            return
+        }
+
+        // Convert AccessibilityEvent to ScreenEvent
+        val screenEvent = convertToScreenEvent(event)
+
+        // Notify all matching listeners
+        for (registered in listeners) {
+            if (registered.filter.matches(screenEvent)) {
+                try {
+                    registered.listener.onScreenEvent(screenEvent)
+                } catch (e: IllegalStateException) {
+                    Log.e(TAG, "IllegalStateException in event listener: ${e.message}", e)
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "SecurityException in event listener: ${e.message}", e)
+                } catch (e: RuntimeException) {
+                    // Catch other runtime exceptions from listener code to prevent one bad listener from breaking others
+                    Log.e(TAG, "RuntimeException in event listener: ${e.message}", e)
+                }
+            }
+        }
+    }
+
+    /**
+     * Converts an Android AccessibilityEvent to our ScreenEvent representation.
+     */
+    private fun convertToScreenEvent(event: AccessibilityEvent): ScreenEvent {
+        val eventType = when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> ScreenEventType.WINDOW_CHANGE
+
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_VIEW_SCROLLED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> ScreenEventType.CONTENT_CHANGE
+
+            else -> ScreenEventType.CONTENT_CHANGE // Default to content change for other events
+        }
+
+        val packageName = event.packageName?.toString()
+
+        // Extract window title from event if available
+        val windowTitle = if (event.text.isNotEmpty()) {
+            event.text.joinToString(" ")
+        } else {
+            event.contentDescription?.toString()
+        }
+
+        // Build additional info string
+        val additionalInfo = buildString {
+            event.className?.let { append("class=$it ") }
+            if (event.itemCount > 0) {
+                append("items=${event.itemCount} ")
+            }
+        }.trim().takeIf { it.isNotEmpty() }
+
+        return ScreenEvent(
+            eventType = eventType,
+            packageName = packageName,
+            windowTitle = windowTitle,
+            timestamp = System.currentTimeMillis(),
+            accessibilityEventType = event.eventType,
+            additionalInfo = additionalInfo
+        )
+    }
+
+    /**
+     * Removes all registered event listeners.
+     * Useful for cleanup when the service is shutting down.
+     */
+    private fun clearAllListeners() {
+        val count = listeners.size
+        listeners.clear()
+        if (count > 0) {
+            Log.d(TAG, "Cleared $count event listeners")
+        }
     }
 
     // TODO: Future methods to be implemented:
