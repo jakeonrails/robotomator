@@ -51,14 +51,21 @@ log_info "This agent will claim the next unclaimed roadmap item and implement it
 
 IMPLEMENTATION_PROMPT="You are the Implementation Agent. Your job is to:
 
-1. Read the ROADMAP.md file and identify the next unclaimed item (the first item that doesn't have a status like 'in progress' or 'completed')
-2. Mark that item as 'in progress' by updating the ROADMAP.md file
-3. Implement the feature completely according to the specification
-4. Make sure your implementation follows Android best practices and the project structure
+1. Read the ROADMAP.md file and identify the FIRST unclaimed item (an item that doesn't have 'COMPLETED' or 'IN PROGRESS' status)
+2. Mark that ONE item as 'IN PROGRESS' by updating the ROADMAP.md file
+3. Implement ONLY that ONE feature completely according to the specification
+4. Mark that item as 'COMPLETED' in the ROADMAP.md when done
+5. Make sure your implementation follows Android best practices and the project structure
 
-IMPORTANT: Only work on ONE item. Once you complete it, your job is done. Do not commit or push anything - that's for the next agent.
+CRITICAL CONSTRAINTS:
+- Work on EXACTLY ONE item - no more, no less
+- Do NOT continue to the next item even if the first one was easy
+- Do NOT bundle multiple items together
+- Stop immediately after marking the first item as COMPLETED
 
-When you're done implementing, respond with 'IMPLEMENTATION COMPLETE' so the next agent knows to proceed."
+Do not commit or push anything - that's for the finalization agent.
+
+When you're done implementing THE ONE ITEM, respond with 'IMPLEMENTATION COMPLETE' so the next agent knows to proceed."
 
 log_info "Launching implementation agent..."
 if echo "$IMPLEMENTATION_PROMPT" | claude --dangerously-skip-permissions --print --model sonnet; then
@@ -104,16 +111,20 @@ log_info "This agent will commit changes, update documentation, and push to GitH
 FINALIZATION_PROMPT="You are the Finalization Agent. Your job is to:
 
 1. Review all the changes that were made
-2. Update the ROADMAP.md to mark the completed item as 'completed' or '✓'
+2. Verify the ROADMAP.md has the completed item(s) marked properly
 3. Update any relevant documentation (README.md, docs/, etc.) if needed
 4. Create a descriptive commit message that explains:
-   - What feature was implemented
+   - Which specific roadmap item(s) were implemented (e.g., 'Group A, Priority 4: Global Actions')
+   - What was implemented
    - What was fixed/improved in review
    - What tests were added
-5. Commit all changes
+5. Commit all changes with the Co-Authored-By line
 6. Push to GitHub
 
-IMPORTANT: This is the final step. Make sure everything is clean and ready to ship.
+IMPORTANT:
+- Use a clear commit message format like: 'feat(group-a): implement [Feature Name] (Priority N)'
+- This is the final step - make sure everything is clean and ready to ship
+- Verify the push succeeds before declaring completion
 
 When you're done, respond with 'FINALIZATION COMPLETE'."
 
