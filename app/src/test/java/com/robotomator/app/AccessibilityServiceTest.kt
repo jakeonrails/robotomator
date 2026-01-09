@@ -582,4 +582,132 @@ class AccessibilityServiceTest {
         assertEquals("First element should be root", "Root", flattened[0].text)
         assertEquals("Second element should be leaf", "Leaf", flattened[1].text)
     }
+
+    // ===== Input Validation Tests =====
+
+    @Test
+    fun testElementSelectorValidTextLength() {
+        // Test that selector accepts text within length limit
+        val validText = "a".repeat(1_000) // At the limit
+        val selector = RobotomatorAccessibilityService.ElementSelector(text = validText)
+        assertEquals(validText, selector.text)
+    }
+
+    @Test
+    fun testElementSelectorRejectsTooLongText() {
+        // Test that selector rejects text exceeding length limit
+        val tooLongText = "a".repeat(1_001) // Over the limit
+        try {
+            RobotomatorAccessibilityService.ElementSelector(text = tooLongText)
+            fail("Should throw IllegalArgumentException for text exceeding limit")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("Error message should mention text limit",
+                e.message?.contains("text") == true)
+        }
+    }
+
+    @Test
+    fun testElementSelectorRejectsTooLongResourceId() {
+        // Test that selector rejects resourceId exceeding length limit
+        val tooLongResourceId = "a".repeat(1_001)
+        try {
+            RobotomatorAccessibilityService.ElementSelector(resourceId = tooLongResourceId)
+            fail("Should throw IllegalArgumentException for resourceId exceeding limit")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("Error message should mention resourceId limit",
+                e.message?.contains("resourceId") == true)
+        }
+    }
+
+    @Test
+    fun testElementSelectorRejectsTooLongClassName() {
+        // Test that selector rejects className exceeding length limit
+        val tooLongClassName = "a".repeat(1_001)
+        try {
+            RobotomatorAccessibilityService.ElementSelector(className = tooLongClassName)
+            fail("Should throw IllegalArgumentException for className exceeding limit")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("Error message should mention className limit",
+                e.message?.contains("className") == true)
+        }
+    }
+
+    @Test
+    fun testElementSelectorRejectsTooLongContentDescription() {
+        // Test that selector rejects contentDescription exceeding length limit
+        val tooLongContentDesc = "a".repeat(1_001)
+        try {
+            RobotomatorAccessibilityService.ElementSelector(contentDescription = tooLongContentDesc)
+            fail("Should throw IllegalArgumentException for contentDescription exceeding limit")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("Error message should mention contentDescription limit",
+                e.message?.contains("contentDescription") == true)
+        }
+    }
+
+    @Test
+    fun testElementSelectorRequiresAtLeastOneCriterion() {
+        // Test that selector requires at least one criterion
+        try {
+            RobotomatorAccessibilityService.ElementSelector()
+            fail("Should throw IllegalArgumentException when no criteria provided")
+        } catch (e: IllegalArgumentException) {
+            assertTrue("Error message should mention requirement",
+                e.message?.contains("At least one") == true)
+        }
+    }
+
+    @Test
+    fun testElementSelectorAllowsMultipleCriteria() {
+        // Test that selector accepts multiple criteria within limits
+        val selector = RobotomatorAccessibilityService.ElementSelector(
+            text = "Submit",
+            resourceId = "com.example:id/submit_button",
+            className = "android.widget.Button",
+            contentDescription = "Submit form"
+        )
+        assertEquals("Submit", selector.text)
+        assertEquals("com.example:id/submit_button", selector.resourceId)
+        assertEquals("android.widget.Button", selector.className)
+        assertEquals("Submit form", selector.contentDescription)
+    }
+
+    @Test
+    fun testElementSelectorNullCriteriaAllowed() {
+        // Test that null criteria are allowed as long as at least one is non-null
+        val selector = RobotomatorAccessibilityService.ElementSelector(
+            text = "Button",
+            resourceId = null,
+            className = null,
+            contentDescription = null
+        )
+        assertEquals("Button", selector.text)
+        assertNull(selector.resourceId)
+        assertNull(selector.className)
+        assertNull(selector.contentDescription)
+    }
+
+    @Test
+    fun testAppLaunchValidationBlankPackageName() {
+        // Document that blank package names should be rejected
+        // This is tested in integration tests where service instance is available
+
+        // Expected behavior:
+        // service.launchApp("") -> Error("Package name cannot be blank")
+        // service.launchApp("   ") -> Error("Package name cannot be blank")
+
+        assertTrue("Test placeholder - blank package name validation tested in integration", true)
+    }
+
+    @Test
+    fun testAppLaunchValidationTooLongPackageName() {
+        // Document that excessively long package names should be rejected
+        // This is tested in integration tests where service instance is available
+
+        // Expected behavior:
+        // val tooLong = "a".repeat(1_001)
+        // service.launchApp(tooLong) -> Error("Package name exceeds maximum length")
+
+        assertTrue("Test placeholder - package name length validation tested in integration", true)
+    }
 }

@@ -34,11 +34,30 @@ class RobotomatorAccessibilityService : AccessibilityService() {
         private const val MAX_TEXT_INPUT_LENGTH = 10_000
 
         /**
+         * Minimum time between processing accessibility events (milliseconds).
+         * Events arriving faster than this are debounced to prevent event flooding.
+         */
+        private const val EVENT_DEBOUNCE_MS = 100L
+
+        /**
+         * Maximum length for selector strings to prevent DoS attacks.
+         * 1,000 characters is more than sufficient for legitimate selectors.
+         */
+        private const val MAX_SELECTOR_STRING_LENGTH = 1_000
+
+        /**
          * Atomic reference to the active service instance.
          * Used by other components to invoke actions on the service.
          * Thread-safe using AtomicReference for compare-and-swap operations.
          */
         private val instanceRef = java.util.concurrent.atomic.AtomicReference<RobotomatorAccessibilityService?>(null)
+
+        /**
+         * Thread-safe list of service lifecycle listeners.
+         * We use CopyOnWriteArrayList for thread-safety without explicit synchronization,
+         * as reads are frequent but writes (add/remove listener) are rare.
+         */
+        private val lifecycleListeners = java.util.concurrent.CopyOnWriteArrayList<ServiceLifecycleListener>()
 
         /**
          * Gets the active service instance if connected.
@@ -51,17 +70,149 @@ class RobotomatorAccessibilityService : AccessibilityService() {
          */
         val isServiceConnected: Boolean
             get() = instanceRef.get() != null
+
+        /**
+         * Registers a listener to receive service lifecycle events.
+         * Listeners are notified when the service connects or disconnects.
+         *
+         * @param listener The listener to register
+         */
+        fun addLifecycleListener(listener: ServiceLifecycleListener) {
+            lifecycleListeners.add(listener)
+            Log.d(TAG, "Service lifecycle listener registered (${lifecycleListeners.size} total)")
+
+            // Immediately notify the listener of the current state
+            val currentInstance = instanceRef.get()
+            if (currentInstance != null) {
+                try {
+                    listener.onServiceConnected(currentInstance)
+                } catch (e: Exception) {
+                    // Catch all exceptions from user-provided listener code to prevent one bad listener
+                    // from breaking the registration process. This is intentionally broad since
+                    // listeners are external code we don't control.
+                    Log.e(TAG, "Exception notifying new listener of current connected state: ${e.message}", e)
+                }
+            }
+        }
+
+        /**
+         * Removes a previously registered lifecycle listener.
+         *
+         * @param listener The listener to remove
+         */
+        fun removeLifecycleListener(listener: ServiceLifecycleListener) {
+            val removed = lifecycleListeners.remove(listener)
+            if (removed) {
+                Log.d(TAG, "Service lifecycle listener removed (${lifecycleListeners.size} remaining)")
+            }
+        }
+
+        /**
+         * Notifies all registered listeners that the service has connected.
+         */
+        private fun notifyServiceConnected(service: RobotomatorAccessibilityService) {
+            for (listener in lifecycleListeners) {
+                try {
+                    listener.onServiceConnected(service)
+                } catch (e: Exception) {
+                    // Catch all exceptions from user-provided listener code to prevent one bad listener
+                    // from breaking others. This is intentionally broad since listeners are external
+                    // code we don't control.
+                    Log.e(TAG, "Exception in lifecycle listener onServiceConnected: ${e.message}", e)
+                }
+            }
+        }
+
+        /**
+         * Notifies all registered listeners that the service has disconnected.
+         */
+        private fun notifyServiceDisconnected() {
+            for (listener in lifecycleListeners) {
+                try {
+                    listener.onServiceDisconnected()
+                } catch (e: Exception) {
+                    // Catch all exceptions from user-provided listener code to prevent one bad listener
+                    // from breaking others. This is intentionally broad since listeners are external
+                    // code we don't control.
+                    Log.e(TAG, "Exception in lifecycle listener onServiceDisconnected: ${e.message}", e)
+                }
+            }
+        }
     }
+
+    /**
+     * Listener interface for service lifecycle events.
+     */
+    interface ServiceLifecycleListener {
+        /**
+         * Called when the accessibility service connects and is ready for use.
+         *
+         * @param service The connected service instance
+         */
+        fun onServiceConnected(service: RobotomatorAccessibilityService)
+
+        /**
+         * Called when the accessibility service disconnects and is no longer available.
+         */
+        fun onServiceDisconnected()
+    }
+
+    /**
+     * Flag to track if the service is being intentionally interrupted.
+     * Used to coordinate cleanup between onInterrupt and onDestroy.
+     */
+    @Volatile
+    private var isInterrupted = false
+
+    /**
+     * Timestamp of last processed accessibility event for debouncing.
+     * Prevents event flooding from affecting service performance.
+     */
+    @Volatile
+    private var lastEventProcessedTime = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        instanceRef.set(this)
-        Log.i(TAG, "Robotomator Accessibility Service connected!")
-        Log.i(TAG, "Service info: ${serviceInfo}")
+
+        Log.i(TAG, "Robotomator Accessibility Service connecting...")
+
+        // Initialize resources
+        try {
+            // Reset interrupt flag
+            isInterrupted = false
+
+            // Set the service instance atomically
+            instanceRef.set(this)
+
+            Log.i(TAG, "Service connected successfully!")
+            Log.i(TAG, "Service info: ${serviceInfo}")
+
+            // Notify lifecycle listeners that the service is ready
+            // Note: notifyServiceConnected internally catches all exceptions from listeners
+            // to prevent one bad listener from breaking the service initialization
+            notifyServiceConnected(this)
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "IllegalStateException during service connection: ${e.message}", e)
+            // Clean up partial initialization
+            instanceRef.set(null)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException during service connection: ${e.message}", e)
+            // Clean up partial initialization
+            instanceRef.set(null)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+
+        // Debounce rapid events to prevent flooding
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastEvent = currentTime - lastEventProcessedTime
+        if (timeSinceLastEvent < EVENT_DEBOUNCE_MS) {
+            // Skip this event - too soon after previous one
+            return
+        }
+        lastEventProcessedTime = currentTime
 
         // Log accessibility events for debugging (don't log event text to avoid PII exposure)
         if (Log.isLoggable(TAG, Log.DEBUG)) {
@@ -80,30 +231,83 @@ class RobotomatorAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        // Called when the system wants to interrupt the feedback this service is providing
-        Log.w(TAG, "Service interrupted")
+        // Called when the system wants to interrupt the feedback this service is providing.
+        // This typically happens when the user disables the service or when the system
+        // needs to temporarily interrupt accessibility services.
+        Log.w(TAG, "Service interrupted by system")
+
+        // Set the interrupted flag so we can coordinate with other lifecycle methods
+        isInterrupted = true
+
+        // Clear event listeners to prevent further processing during interruption
+        clearAllListeners()
+
         // TODO: Future iterations will:
-        // - Pause any running automations
+        // - Pause any running automations gracefully
         // - Notify execution engine of interruption
+        // - Save any in-progress state for potential resumption
     }
 
     override fun onDestroy() {
-        clearAllListeners()
-        instanceRef.set(null)
-        Log.i(TAG, "Robotomator Accessibility Service disconnected")
-        super.onDestroy()
+        Log.i(TAG, "Robotomator Accessibility Service disconnecting...")
+
+        try {
+            // Perform cleanup operations
+            performCleanup()
+
+            Log.i(TAG, "Service disconnected successfully")
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "IllegalStateException during service cleanup: ${e.message}", e)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException during service cleanup: ${e.message}", e)
+        } finally {
+            // Always call super.onDestroy() even if cleanup fails
+            super.onDestroy()
+        }
 
         // TODO: Future iterations will:
-        // - Clean up any running automations
+        // - Clean up any running automations gracefully
         // - Release cached screen representations
-        // - Notify UI of service disconnection
+        // - Cancel pending background operations
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
+        Log.i(TAG, "Service unbind requested")
+
+        try {
+            // Perform cleanup operations (same as onDestroy)
+            // onUnbind can be called independently of onDestroy in some scenarios
+            performCleanup()
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "IllegalStateException during service unbind: ${e.message}", e)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException during service unbind: ${e.message}", e)
+        }
+
+        // Return false to prevent automatic rebinding
+        // If we want to support rebinding in the future, return true
+        return false
+    }
+
+    /**
+     * Performs cleanup operations when the service is shutting down or unbinding.
+     * This method is called from both onDestroy and onUnbind to ensure consistent cleanup.
+     *
+     * This method is idempotent - it can be safely called multiple times.
+     */
+    private fun performCleanup() {
+        // Clear all event listeners to prevent further event processing
         clearAllListeners()
-        instanceRef.set(null)
-        Log.i(TAG, "Service unbound")
-        return super.onUnbind(intent)
+
+        // Clear the service instance reference atomically
+        // This ensures that any threads checking isServiceConnected will immediately see false
+        val previousInstance = instanceRef.getAndSet(null)
+
+        // Only notify listeners if the service was actually connected
+        if (previousInstance != null) {
+            // Notify lifecycle listeners that the service is no longer available
+            notifyServiceDisconnected()
+        }
     }
 
     // ===== Global Actions API =====
@@ -218,6 +422,28 @@ class RobotomatorAccessibilityService : AccessibilityService() {
         init {
             require(text != null || resourceId != null || className != null || contentDescription != null) {
                 "At least one selector criterion must be provided"
+            }
+
+            // Validate string lengths to prevent DoS attacks
+            text?.let {
+                require(it.length <= MAX_SELECTOR_STRING_LENGTH) {
+                    "Selector text exceeds maximum length of $MAX_SELECTOR_STRING_LENGTH characters"
+                }
+            }
+            resourceId?.let {
+                require(it.length <= MAX_SELECTOR_STRING_LENGTH) {
+                    "Selector resourceId exceeds maximum length of $MAX_SELECTOR_STRING_LENGTH characters"
+                }
+            }
+            className?.let {
+                require(it.length <= MAX_SELECTOR_STRING_LENGTH) {
+                    "Selector className exceeds maximum length of $MAX_SELECTOR_STRING_LENGTH characters"
+                }
+            }
+            contentDescription?.let {
+                require(it.length <= MAX_SELECTOR_STRING_LENGTH) {
+                    "Selector contentDescription exceeds maximum length of $MAX_SELECTOR_STRING_LENGTH characters"
+                }
             }
         }
     }
@@ -1035,6 +1261,12 @@ class RobotomatorAccessibilityService : AccessibilityService() {
         if (packageName.isBlank()) {
             Log.w(TAG, "Cannot launch app: Package name is blank")
             return AppLaunchResult.Error(packageName, "Package name cannot be blank")
+        }
+
+        // Validate package name length to prevent DoS
+        if (packageName.length > MAX_SELECTOR_STRING_LENGTH) {
+            Log.w(TAG, "Cannot launch app: Package name too long (${packageName.length} > $MAX_SELECTOR_STRING_LENGTH)")
+            return AppLaunchResult.Error(packageName, "Package name exceeds maximum length")
         }
 
         if (!isServiceConnected) {
