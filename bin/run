@@ -27,10 +27,35 @@ echo -e "${GREEN}Building and installing app (${BUILD_TYPE})${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Check if device/emulator is connected
-DEVICES=$(adb devices | grep -v "List" | grep "device" | wc -l)
+# Check for physical devices (prefer them over emulators)
+PHYSICAL_DEVICES=$(adb devices | grep -v "List" | grep "device" | grep -v "emulator-" | wc -l)
+EMULATORS=$(adb devices | grep -v "List" | grep "device" | grep "emulator-" | wc -l)
+TOTAL_DEVICES=$(adb devices | grep -v "List" | grep "device" | wc -l)
 
-if [ "$DEVICES" -eq 0 ]; then
+# If physical device is connected, use it (and optionally kill emulator to save resources)
+if [ "$PHYSICAL_DEVICES" -gt 0 ]; then
+    DEVICE_NAME=$(adb devices -l | grep -v "List" | grep "device" | grep -v "emulator-" | head -1 | awk '{print $1}')
+    echo -e "${GREEN}✓ Physical device detected: $DEVICE_NAME${NC}"
+
+    # If an emulator is also running, kill it to save resources
+    if [ "$EMULATORS" -gt 0 ]; then
+        echo -e "${YELLOW}Stopping emulator to save CPU/RAM...${NC}"
+        # Kill all running emulators
+        adb devices | grep "emulator-" | awk '{print $1}' | while read -r emu; do
+            adb -s "$emu" emu kill 2>/dev/null || true
+        done
+        sleep 1
+        echo -e "${GREEN}✓ Emulator stopped${NC}"
+    fi
+    echo ""
+
+# If only emulator is connected, use it
+elif [ "$EMULATORS" -gt 0 ]; then
+    echo -e "${BLUE}Using emulator${NC}"
+    echo ""
+
+# If nothing is connected, start an emulator
+elif [ "$TOTAL_DEVICES" -eq 0 ]; then
     echo -e "${YELLOW}No device or emulator connected. Starting emulator...${NC}"
     echo ""
 
