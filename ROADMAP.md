@@ -25,7 +25,7 @@ The journey ahead is organized by what can be built in parallel. Within each gro
 | 5 | Element Interactions | Tap, type, scroll, long press - teach our robot to poke things properly | The fun begins | ✅ **COMPLETED** |
 | 6 | Screen Content Reading | Traverse the accessibility node tree and capture everything we see | Robot vision | ✅ **COMPLETED** |
 | 7 | Event Monitoring | Detect when the screen changes so we're never caught off guard | Always aware | ✅ **COMPLETED** |
-| 8 | App Launching | Start apps by package name because robots love precision | App summoning |
+| 8 | App Launching | Start apps by package name because robots love precision | App summoning | ✅ **COMPLETED** |
 | 9 | Service Lifecycle | Gracefully start up, shut down, and bind without drama | Professional robot |
 
 **Milestone:** When Group A is complete, we can see any screen, tap any button, and type into any field. The robot has awakened!

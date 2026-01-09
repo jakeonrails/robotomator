@@ -765,8 +765,15 @@ class RobotomatorAccessibilityService : AccessibilityService() {
         depth: Int,
         children: List<ScreenElement>
     ): ScreenElement {
+        // Mask password text for security
+        val text = if (node.isPassword) {
+            node.text?.let { "[MASKED_PASSWORD]" }
+        } else {
+            node.text?.toString()
+        }
+
         return ScreenElement(
-            text = node.text?.toString(),
+            text = text,
             contentDescription = node.contentDescription?.toString(),
             className = node.className?.toString(),
             viewIdResourceName = node.viewIdResourceName,
@@ -929,12 +936,13 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                 try {
                     registered.listener.onScreenEvent(screenEvent)
                 } catch (e: IllegalStateException) {
-                    Log.e(TAG, "IllegalStateException in event listener: ${e.message}", e)
+                    Log.e(TAG, "IllegalStateException in event listener for ${screenEvent.eventType}: ${e.message}", e)
                 } catch (e: SecurityException) {
-                    Log.e(TAG, "SecurityException in event listener: ${e.message}", e)
-                } catch (e: RuntimeException) {
-                    // Catch other runtime exceptions from listener code to prevent one bad listener from breaking others
-                    Log.e(TAG, "RuntimeException in event listener: ${e.message}", e)
+                    Log.e(TAG, "SecurityException in event listener for ${screenEvent.eventType}: ${e.message}", e)
+                } catch (e: Exception) {
+                    // Catch all exceptions from user-provided listener code to prevent one bad listener from breaking others
+                    // This is intentionally broad since listeners are external code we don't control
+                    Log.e(TAG, "Unexpected exception in event listener for ${screenEvent.eventType}: ${e.javaClass.simpleName} - ${e.message}", e)
                 }
             }
         }
@@ -991,6 +999,79 @@ class RobotomatorAccessibilityService : AccessibilityService() {
         listeners.clear()
         if (count > 0) {
             Log.d(TAG, "Cleared $count event listeners")
+        }
+    }
+
+    // ===== App Launching API =====
+
+    /**
+     * Result of attempting to launch an app.
+     */
+    sealed class AppLaunchResult {
+        /** App launch initiated successfully */
+        object Success : AppLaunchResult()
+
+        /** Service not connected */
+        object ServiceNotConnected : AppLaunchResult()
+
+        /** Package not found on device */
+        data class PackageNotFound(val packageName: String) : AppLaunchResult()
+
+        /** Launch failed due to error */
+        data class Error(val packageName: String, val message: String) : AppLaunchResult()
+    }
+
+    /**
+     * Launches an app by its package name.
+     *
+     * This method uses the Android Intent system to launch the app's main activity.
+     * The app must be installed on the device and have a launchable main activity.
+     *
+     * @param packageName The package name of the app to launch (e.g., "com.android.chrome")
+     * @return Result indicating success or failure
+     */
+    fun launchApp(packageName: String): AppLaunchResult {
+        // Validate package name is not empty
+        if (packageName.isBlank()) {
+            Log.w(TAG, "Cannot launch app: Package name is blank")
+            return AppLaunchResult.Error(packageName, "Package name cannot be blank")
+        }
+
+        if (!isServiceConnected) {
+            Log.w(TAG, "Cannot launch app: Service not connected")
+            return AppLaunchResult.ServiceNotConnected
+        }
+
+        return try {
+            // Get the package manager to query for the launch intent
+            val packageManager = applicationContext.packageManager
+
+            // Get the launch intent for this package
+            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+
+            if (launchIntent == null) {
+                Log.w(TAG, "Cannot launch app: No launch intent found for package: $packageName")
+                return AppLaunchResult.PackageNotFound(packageName)
+            }
+
+            // Set flags to start the activity in a new task
+            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+
+            // Start the activity
+            applicationContext.startActivity(launchIntent)
+
+            Log.d(TAG, "Successfully launched app: $packageName")
+            AppLaunchResult.Success
+        } catch (e: android.content.ActivityNotFoundException) {
+            Log.e(TAG, "ActivityNotFoundException launching app $packageName: ${e.message}", e)
+            AppLaunchResult.PackageNotFound(packageName)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException launching app $packageName: ${e.message}", e)
+            AppLaunchResult.Error(packageName, "Permission denied: ${e.message}")
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "IllegalArgumentException launching app $packageName: ${e.message}", e)
+            AppLaunchResult.Error(packageName, "Invalid package name: ${e.message}")
         }
     }
 

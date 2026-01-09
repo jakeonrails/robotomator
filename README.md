@@ -17,13 +17,16 @@ AI-powered Android automation platform. Describe automations in natural language
 
 ## Status
 
-**Current Progress**: Group A (The Foundation) - Items 1-5/9 Complete
+**Current Progress**: Group A (The Foundation) - Items 1-8/9 Complete
 
 ✅ Service Registration - AccessibilityService is registered and ready to connect
 ✅ Permission Detection - Can detect if accessibility service is enabled
 ✅ Permission Request Flow - Complete UI for guiding users through permission setup
 ✅ Global Actions - Back, home, recents, notifications, quick settings, and power dialog
 ✅ Element Interactions - Tap, type, scroll, long press, and swipe gestures
+✅ Screen Content Reading - Traverse accessibility tree and capture screen structure
+✅ Event Monitoring - Listen for screen changes and accessibility events
+✅ App Launching - Launch apps by package name
 
 See `ROADMAP.md` for the complete development plan.
 
@@ -140,6 +143,48 @@ All interactions include proper error handling, node recycling to prevent memory
 
 Key implementation: `RobotomatorAccessibilityService.kt` at app/src/main/java/com/robotomator/app/RobotomatorAccessibilityService.kt:189
 
+#### 6. Screen Content Reading (Completed)
+
+Complete accessibility tree traversal with structured screen representation:
+
+- **Tree Traversal**: Recursive depth-first traversal with configurable depth limits
+- **Element Properties**: Text, content description, class, bounds, clickability, editability, password detection
+- **Hierarchy**: Nested children with depth tracking for AI-friendly representation
+- **Security**: Automatic masking of password field text as `[MASKED_PASSWORD]`
+- **Utilities**: `describe()` for human-readable format, `flatten()` for list view, `totalElementCount()` for size
+
+Returns a tree of `ScreenElement` objects that can be easily serialized for AI processing.
+
+Key implementation: `RobotomatorAccessibilityService.kt` at app/src/main/java/com/robotomator/app/RobotomatorAccessibilityService.kt:697
+
+#### 7. Event Monitoring (Completed)
+
+Real-time accessibility event monitoring with flexible filtering:
+
+- **Event Types**: Window changes, content changes, scroll events, click/focus events
+- **Filtering**: Subscribe to specific event types and package names
+- **Thread-Safe**: Uses `CopyOnWriteArrayList` for concurrent listener management
+- **Error Isolation**: Exceptions in one listener don't affect others
+- **Subscription Management**: Returns unsubscribe function for easy cleanup
+
+Listeners receive `ScreenEvent` objects with event type, package name, window title, and underlying accessibility event type.
+
+Key implementation: `RobotomatorAccessibilityService.kt` at app/src/main/java/com/robotomator/app/RobotomatorAccessibilityService.kt:808
+
+#### 8. App Launching (Completed)
+
+Launch apps by package name using Android Intent system:
+
+- **Package Resolution**: Uses PackageManager to find app launch intents
+- **Validation**: Checks for blank package names and missing apps
+- **Flags**: Properly configured for new task and clear top behavior
+- **Error Handling**: Detailed error reporting for not found, permission denied, and invalid package names
+- **Result Types**: `Success`, `ServiceNotConnected`, `PackageNotFound`, `Error`
+
+Returns a sealed class result for exhaustive when-expression handling.
+
+Key implementation: `RobotomatorAccessibilityService.kt` at app/src/main/java/com/robotomator/app/RobotomatorAccessibilityService.kt:1005
+
 ### Testing
 
 Comprehensive test coverage includes:
@@ -149,6 +194,9 @@ Comprehensive test coverage includes:
 - 3 service lifecycle documentation tests
 - 227 lines of global actions tests (6 test cases)
 - 526 lines of element interaction tests (comprehensive coverage)
+- Screen content reading tests (element structure and security)
+- Event monitoring tests (filtering, thread safety, lifecycle)
+- App launching tests (5 test cases covering result types and behavior)
 
 See `TEST_REVIEW.md` for complete test documentation.
 
