@@ -22,11 +22,12 @@ class ElementInteractionsTest {
         // Create a spy of the service
         service = spyk(RobotomatorAccessibilityService())
 
-        // Set the service as connected
-        RobotomatorAccessibilityService::class.java
-            .getDeclaredField("isServiceConnected")
+        // Set the service as connected by setting the instance reference
+        val instanceRefField = RobotomatorAccessibilityService::class.java
+            .getDeclaredField("instanceRef")
             .apply { isAccessible = true }
-            .setBoolean(null, true)
+        val instanceRef = instanceRefField.get(null) as java.util.concurrent.atomic.AtomicReference<RobotomatorAccessibilityService?>
+        instanceRef.set(service)
 
         // Create mock nodes
         mockRootNode = mockk(relaxed = true)
@@ -39,10 +40,11 @@ class ElementInteractionsTest {
     @After
     fun tearDown() {
         // Reset service connection state
-        RobotomatorAccessibilityService::class.java
-            .getDeclaredField("isServiceConnected")
+        val instanceRefField = RobotomatorAccessibilityService::class.java
+            .getDeclaredField("instanceRef")
             .apply { isAccessible = true }
-            .setBoolean(null, false)
+        val instanceRef = instanceRefField.get(null) as java.util.concurrent.atomic.AtomicReference<RobotomatorAccessibilityService?>
+        instanceRef.set(null)
 
         clearAllMocks()
     }
@@ -470,10 +472,11 @@ class ElementInteractionsTest {
     // ===== Helper Methods =====
 
     private fun setServiceConnected(connected: Boolean) {
-        RobotomatorAccessibilityService::class.java
-            .getDeclaredField("isServiceConnected")
+        val instanceRefField = RobotomatorAccessibilityService::class.java
+            .getDeclaredField("instanceRef")
             .apply { isAccessible = true }
-            .setBoolean(null, connected)
+        val instanceRef = instanceRefField.get(null) as java.util.concurrent.atomic.AtomicReference<RobotomatorAccessibilityService?>
+        instanceRef.set(if (connected) service else null)
     }
 
     private fun setupNodeTree(

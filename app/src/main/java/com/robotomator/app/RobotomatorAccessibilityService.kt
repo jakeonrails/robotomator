@@ -22,30 +22,40 @@ class RobotomatorAccessibilityService : AccessibilityService() {
         private const val TAG = "RobotomatorA11yService"
 
         /**
-         * Tracks whether the service is currently connected and active.
-         * This can be checked by other components to determine if automation is available.
+         * Maximum depth to traverse in the accessibility tree.
+         * Prevents stack overflow from malformed or extremely deep trees.
          */
-        @Volatile
-        var isServiceConnected = false
-            private set
+        private const val MAX_TREE_DEPTH = 50
 
         /**
-         * Reference to the active service instance.
-         * Used by other components to invoke actions on the service.
+         * Maximum length of text input to prevent DoS attacks.
+         * 10,000 characters is sufficient for most legitimate use cases.
          */
-        @Volatile
-        private var instance: RobotomatorAccessibilityService? = null
+        private const val MAX_TEXT_INPUT_LENGTH = 10_000
+
+        /**
+         * Atomic reference to the active service instance.
+         * Used by other components to invoke actions on the service.
+         * Thread-safe using AtomicReference for compare-and-swap operations.
+         */
+        private val instanceRef = java.util.concurrent.atomic.AtomicReference<RobotomatorAccessibilityService?>(null)
 
         /**
          * Gets the active service instance if connected.
          */
-        fun getInstance(): RobotomatorAccessibilityService? = instance
+        fun getInstance(): RobotomatorAccessibilityService? = instanceRef.get()
+
+        /**
+         * Tracks whether the service is currently connected and active.
+         * This can be checked by other components to determine if automation is available.
+         */
+        val isServiceConnected: Boolean
+            get() = instanceRef.get() != null
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        instance = this
-        isServiceConnected = true
+        instanceRef.set(this)
         Log.i(TAG, "Robotomator Accessibility Service connected!")
         Log.i(TAG, "Service info: ${serviceInfo}")
     }
@@ -74,8 +84,7 @@ class RobotomatorAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        instance = null
-        isServiceConnected = false
+        instanceRef.set(null)
         Log.i(TAG, "Robotomator Accessibility Service disconnected")
         super.onDestroy()
 
@@ -86,8 +95,7 @@ class RobotomatorAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
-        instance = null
-        isServiceConnected = false
+        instanceRef.set(null)
         Log.i(TAG, "Service unbound")
         return super.onUnbind(intent)
     }
@@ -163,9 +171,12 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                 Log.w(TAG, "System denied global action: ${action.name}")
                 GlobalActionResult.SystemDenied(action)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error performing global action ${action.name}: ${e.message}", e)
-            GlobalActionResult.Error(action, e.message ?: "Unknown error")
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "IllegalStateException performing global action ${action.name}: ${e.message}", e)
+            GlobalActionResult.Error(action, e.message ?: "Service in invalid state")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException performing global action ${action.name}: ${e.message}", e)
+            GlobalActionResult.Error(action, "Permission denied: ${e.message}")
         }
     }
 
@@ -244,15 +255,14 @@ class RobotomatorAccessibilityService : AccessibilityService() {
             return FindElementResult.ServiceNotConnected
         }
 
-        return try {
-            val rootNode = rootInActiveWindow
-            if (rootNode == null) {
-                Log.w(TAG, "Cannot find element: No active window")
-                return FindElementResult.NotFound
-            }
+        val rootNode = rootInActiveWindow
+        if (rootNode == null) {
+            Log.w(TAG, "Cannot find element: No active window")
+            return FindElementResult.NotFound
+        }
 
+        return try {
             val result = findElementRecursive(rootNode, selector)
-            rootNode.recycle()
 
             if (result != null) {
                 Log.d(TAG, "Found element matching selector: $selector")
@@ -261,9 +271,14 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                 Log.d(TAG, "Element not found for selector: $selector")
                 FindElementResult.NotFound
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error finding element: ${e.message}", e)
-            FindElementResult.Error(e.message ?: "Unknown error")
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "IllegalStateException finding element: ${e.message}", e)
+            FindElementResult.Error(e.message ?: "Node became stale")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException finding element: ${e.message}", e)
+            FindElementResult.Error("Permission denied: ${e.message}")
+        } finally {
+            rootNode.recycle()
         }
     }
 
@@ -275,8 +290,15 @@ class RobotomatorAccessibilityService : AccessibilityService() {
      */
     private fun findElementRecursive(
         node: android.view.accessibility.AccessibilityNodeInfo,
-        selector: ElementSelector
+        selector: ElementSelector,
+        depth: Int = 0
     ): android.view.accessibility.AccessibilityNodeInfo? {
+        // Enforce depth limit to prevent stack overflow
+        if (depth >= MAX_TREE_DEPTH) {
+            Log.w(TAG, "Reached maximum tree depth ($MAX_TREE_DEPTH) during element search")
+            return null
+        }
+
         // Check if current node matches
         if (matchesSelector(node, selector)) {
             return node
@@ -285,7 +307,7 @@ class RobotomatorAccessibilityService : AccessibilityService() {
         // Search children
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val result = findElementRecursive(child, selector)
+            val result = findElementRecursive(child, selector, depth + 1)
             if (result != null) {
                 // Found a match in the subtree
                 // If the result is the child itself, return it without recycling
@@ -363,7 +385,6 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                     val success = findResult.node.performAction(
                         android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
                     )
-                    findResult.node.recycle()
 
                     if (success) {
                         Log.d(TAG, "Successfully tapped element: $selector")
@@ -372,9 +393,14 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                         Log.w(TAG, "Failed to tap element: $selector")
                         InteractionResult.ActionFailed("Click action returned false")
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error tapping element: ${e.message}", e)
-                    InteractionResult.Error(e.message ?: "Unknown error")
+                } catch (e: IllegalStateException) {
+                    Log.e(TAG, "IllegalStateException tapping element: ${e.message}", e)
+                    InteractionResult.Error(e.message ?: "Node became stale")
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "SecurityException tapping element: ${e.message}", e)
+                    InteractionResult.Error("Permission denied: ${e.message}")
+                } finally {
+                    findResult.node.recycle()
                 }
             }
             is FindElementResult.NotFound -> {
@@ -404,7 +430,6 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                     val success = findResult.node.performAction(
                         android.view.accessibility.AccessibilityNodeInfo.ACTION_LONG_CLICK
                     )
-                    findResult.node.recycle()
 
                     if (success) {
                         Log.d(TAG, "Successfully long pressed element: $selector")
@@ -413,9 +438,14 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                         Log.w(TAG, "Failed to long press element: $selector")
                         InteractionResult.ActionFailed("Long click action returned false")
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error long pressing element: ${e.message}", e)
-                    InteractionResult.Error(e.message ?: "Unknown error")
+                } catch (e: IllegalStateException) {
+                    Log.e(TAG, "IllegalStateException long pressing element: ${e.message}", e)
+                    InteractionResult.Error(e.message ?: "Node became stale")
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "SecurityException long pressing element: ${e.message}", e)
+                    InteractionResult.Error("Permission denied: ${e.message}")
+                } finally {
+                    findResult.node.recycle()
                 }
             }
             is FindElementResult.NotFound -> {
@@ -435,6 +465,12 @@ class RobotomatorAccessibilityService : AccessibilityService() {
      * @return Result indicating success or failure
      */
     fun performType(selector: ElementSelector, text: String): InteractionResult {
+        // Validate text length to prevent DoS
+        if (text.length > MAX_TEXT_INPUT_LENGTH) {
+            Log.w(TAG, "Cannot perform type: Text too long (${text.length} > $MAX_TEXT_INPUT_LENGTH)")
+            return InteractionResult.Error("Text exceeds maximum length of $MAX_TEXT_INPUT_LENGTH characters")
+        }
+
         if (!isServiceConnected) {
             Log.w(TAG, "Cannot perform type: Service not connected")
             return InteractionResult.ServiceNotConnected
@@ -451,7 +487,6 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                     )
 
                     if (!focusSuccess) {
-                        node.recycle()
                         Log.w(TAG, "Failed to focus element for typing: $selector")
                         return InteractionResult.ActionFailed("Could not focus element")
                     }
@@ -468,7 +503,6 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                         android.view.accessibility.AccessibilityNodeInfo.ACTION_SET_TEXT,
                         arguments
                     )
-                    node.recycle()
 
                     if (success) {
                         Log.d(TAG, "Successfully typed text into element: $selector")
@@ -477,9 +511,14 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                         Log.w(TAG, "Failed to type text into element: $selector")
                         InteractionResult.ActionFailed("Set text action returned false")
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error typing into element: ${e.message}", e)
-                    InteractionResult.Error(e.message ?: "Unknown error")
+                } catch (e: IllegalStateException) {
+                    Log.e(TAG, "IllegalStateException typing into element: ${e.message}", e)
+                    InteractionResult.Error(e.message ?: "Node became stale")
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "SecurityException typing into element: ${e.message}", e)
+                    InteractionResult.Error("Permission denied: ${e.message}")
+                } finally {
+                    findResult.node.recycle()
                 }
             }
             is FindElementResult.NotFound -> {
@@ -526,40 +565,49 @@ class RobotomatorAccessibilityService : AccessibilityService() {
                     Log.w(TAG, "Cannot scroll: No active window")
                     return InteractionResult.ElementNotFound
                 }
-                val scrollable = findFirstScrollable(rootNode)
-                rootNode.recycle()
 
-                if (scrollable == null) {
-                    Log.w(TAG, "Cannot scroll: No scrollable element found")
-                    return InteractionResult.ElementNotFound
+                try {
+                    val scrollable = findFirstScrollable(rootNode)
+                    if (scrollable == null) {
+                        Log.w(TAG, "Cannot scroll: No scrollable element found")
+                        return InteractionResult.ElementNotFound
+                    }
+                    scrollable
+                } finally {
+                    rootNode.recycle()
                 }
-                scrollable
             }
 
-            val action = when (direction) {
-                ScrollDirection.UP, ScrollDirection.BACKWARD ->
-                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
-                ScrollDirection.DOWN, ScrollDirection.FORWARD ->
-                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
-                ScrollDirection.LEFT ->
-                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
-                ScrollDirection.RIGHT ->
-                    android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
-            }
+            try {
+                val action = when (direction) {
+                    ScrollDirection.UP, ScrollDirection.BACKWARD ->
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                    ScrollDirection.DOWN, ScrollDirection.FORWARD ->
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                    ScrollDirection.LEFT ->
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                    ScrollDirection.RIGHT ->
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                }
 
-            val success = node.performAction(action)
-            node.recycle()
+                val success = node.performAction(action)
 
-            if (success) {
-                Log.d(TAG, "Successfully scrolled $direction")
-                InteractionResult.Success
-            } else {
-                Log.w(TAG, "Failed to scroll $direction")
-                InteractionResult.ActionFailed("Scroll action returned false")
+                if (success) {
+                    Log.d(TAG, "Successfully scrolled $direction")
+                    InteractionResult.Success
+                } else {
+                    Log.w(TAG, "Failed to scroll $direction")
+                    InteractionResult.ActionFailed("Scroll action returned false")
+                }
+            } finally {
+                node.recycle()
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error scrolling: ${e.message}", e)
-            InteractionResult.Error(e.message ?: "Unknown error")
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "IllegalStateException scrolling: ${e.message}", e)
+            InteractionResult.Error(e.message ?: "Node became stale")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException scrolling: ${e.message}", e)
+            InteractionResult.Error("Permission denied: ${e.message}")
         }
     }
 
@@ -570,15 +618,22 @@ class RobotomatorAccessibilityService : AccessibilityService() {
      * All other nodes are recycled internally.
      */
     private fun findFirstScrollable(
-        node: android.view.accessibility.AccessibilityNodeInfo
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        depth: Int = 0
     ): android.view.accessibility.AccessibilityNodeInfo? {
+        // Enforce depth limit to prevent stack overflow
+        if (depth >= MAX_TREE_DEPTH) {
+            Log.w(TAG, "Reached maximum tree depth ($MAX_TREE_DEPTH) during scrollable search")
+            return null
+        }
+
         if (node.isScrollable) {
             return node
         }
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val result = findFirstScrollable(child)
+            val result = findFirstScrollable(child, depth + 1)
             if (result != null) {
                 // Found a scrollable element in the subtree
                 // If the result is the child itself, return it without recycling
@@ -595,8 +650,136 @@ class RobotomatorAccessibilityService : AccessibilityService() {
         return null
     }
 
+    // ===== Screen Content Reading API =====
+
+    /**
+     * Reads the current screen content and returns a structured representation.
+     *
+     * This is the primary API for capturing what's on screen at any moment.
+     * By default, it reads the active application window, but can be configured
+     * to read system windows, input methods, etc.
+     *
+     * @param filterWindowType Optional window type to filter for (null = read active window only)
+     * @return Result containing the screen representation or error
+     */
+    fun readScreenContent(filterWindowType: WindowType? = null): ScreenReadResult {
+        if (!isServiceConnected) {
+            Log.w(TAG, "Cannot read screen: Service not connected")
+            return ScreenReadResult.ServiceNotConnected
+        }
+
+        return try {
+            // For now, we only support reading the active window
+            // Future iterations will support reading multiple windows with filtering
+            val rootNode = rootInActiveWindow
+            if (rootNode == null) {
+                Log.w(TAG, "Cannot read screen: No active window")
+                return ScreenReadResult.NoActiveWindow
+            }
+
+            try {
+                val rootElement = traverseNodeTree(rootNode, depth = 0)
+                val packageName = rootNode.packageName?.toString()
+                val activityName = null // ActivityName not directly available from node
+
+                // Determine window type (for now, assume APPLICATION)
+                // Future iterations will properly detect window type from AccessibilityWindowInfo
+                val detectedWindowType = filterWindowType ?: WindowType.APPLICATION
+
+                ScreenReadResult.Success(
+                    ScreenRepresentation(
+                        windowType = detectedWindowType,
+                        packageName = packageName,
+                        activityName = activityName,
+                        rootElement = rootElement,
+                        timestamp = System.currentTimeMillis()
+                    )
+                )
+            } finally {
+                rootNode.recycle()
+            }
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "IllegalStateException reading screen: ${e.message}", e)
+            ScreenReadResult.Error(e.message ?: "Screen reading failed")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException reading screen: ${e.message}", e)
+            ScreenReadResult.Error("Permission denied: ${e.message}")
+        }
+    }
+
+    /**
+     * Traverses the accessibility node tree recursively and builds a ScreenElement tree.
+     *
+     * IMPORTANT: This method does NOT recycle nodes - the caller is responsible for
+     * recycling the root node. All child nodes are recycled internally.
+     *
+     * @param node The node to traverse
+     * @param depth The current depth in the tree (0 for root)
+     * @return ScreenElement representing this node and its children
+     */
+    private fun traverseNodeTree(
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        depth: Int
+    ): ScreenElement {
+        // Enforce depth limit to prevent stack overflow
+        if (depth >= MAX_TREE_DEPTH) {
+            Log.w(TAG, "Reached maximum tree depth ($MAX_TREE_DEPTH), stopping traversal")
+            return extractNodeProperties(node, depth, emptyList())
+        }
+
+        // Extract properties from current node
+        val children = mutableListOf<ScreenElement>()
+
+        // Traverse children
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                try {
+                    val childElement = traverseNodeTree(child, depth + 1)
+                    children.add(childElement)
+                } finally {
+                    child.recycle()
+                }
+            }
+        }
+
+        return extractNodeProperties(node, depth, children)
+    }
+
+    /**
+     * Extracts properties from an AccessibilityNodeInfo into a ScreenElement.
+     *
+     * @param node The node to extract properties from
+     * @param depth The depth of this node in the tree
+     * @param children The already-processed child elements
+     * @return ScreenElement with all properties extracted
+     */
+    private fun extractNodeProperties(
+        node: android.view.accessibility.AccessibilityNodeInfo,
+        depth: Int,
+        children: List<ScreenElement>
+    ): ScreenElement {
+        return ScreenElement(
+            text = node.text?.toString(),
+            contentDescription = node.contentDescription?.toString(),
+            className = node.className?.toString(),
+            viewIdResourceName = node.viewIdResourceName,
+            bounds = android.graphics.Rect().apply { node.getBoundsInScreen(this) },
+            isClickable = node.isClickable,
+            isCheckable = node.isCheckable,
+            isChecked = node.isChecked,
+            isEnabled = node.isEnabled,
+            isScrollable = node.isScrollable,
+            isEditable = node.isEditable,
+            isFocusable = node.isFocusable,
+            isFocused = node.isFocused,
+            isPassword = node.isPassword,
+            children = children,
+            depth = depth
+        )
+    }
+
     // TODO: Future methods to be implemented:
-    // - getScreenRepresentation(): ScreenRepresentation
     // - waitForElement(selector: ElementSelector, timeout: Duration): Boolean
     // - performSwipe(from: Point, to: Point)
     // - getElementBounds(selector: ElementSelector): Rect?

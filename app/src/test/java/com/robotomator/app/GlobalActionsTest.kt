@@ -19,20 +19,22 @@ class GlobalActionsTest {
         // Create a spy of the service so we can mock performGlobalAction(int)
         service = spyk(RobotomatorAccessibilityService())
 
-        // Set the service as connected
-        RobotomatorAccessibilityService::class.java
-            .getDeclaredField("isServiceConnected")
+        // Set the service as connected by setting the instance reference
+        val instanceRefField = RobotomatorAccessibilityService::class.java
+            .getDeclaredField("instanceRef")
             .apply { isAccessible = true }
-            .setBoolean(null, true)
+        val instanceRef = instanceRefField.get(null) as java.util.concurrent.atomic.AtomicReference<RobotomatorAccessibilityService?>
+        instanceRef.set(service)
     }
 
     @After
     fun tearDown() {
         // Reset service connection state
-        RobotomatorAccessibilityService::class.java
-            .getDeclaredField("isServiceConnected")
+        val instanceRefField = RobotomatorAccessibilityService::class.java
+            .getDeclaredField("instanceRef")
             .apply { isAccessible = true }
-            .setBoolean(null, false)
+        val instanceRef = instanceRefField.get(null) as java.util.concurrent.atomic.AtomicReference<RobotomatorAccessibilityService?>
+        instanceRef.set(null)
 
         clearAllMocks()
     }
@@ -131,11 +133,12 @@ class GlobalActionsTest {
 
     @Test
     fun `performGlobalAction returns ServiceNotConnected when service is not connected`() {
-        // Given
-        RobotomatorAccessibilityService::class.java
-            .getDeclaredField("isServiceConnected")
+        // Given - set service as disconnected
+        val instanceRefField = RobotomatorAccessibilityService::class.java
+            .getDeclaredField("instanceRef")
             .apply { isAccessible = true }
-            .setBoolean(null, false)
+        val instanceRef = instanceRefField.get(null) as java.util.concurrent.atomic.AtomicReference<RobotomatorAccessibilityService?>
+        instanceRef.set(null)
 
         // When
         val result = service.performGlobalAction(RobotomatorAccessibilityService.GlobalAction.BACK)
@@ -151,7 +154,7 @@ class GlobalActionsTest {
         val exceptionMessage = "Test exception"
         every {
             service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
-        } throws RuntimeException(exceptionMessage)
+        } throws IllegalStateException(exceptionMessage)
 
         // When
         val result = service.performGlobalAction(RobotomatorAccessibilityService.GlobalAction.HOME)
