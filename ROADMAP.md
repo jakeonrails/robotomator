@@ -161,7 +161,7 @@ The journey ahead is organized by what can be built in parallel. Within each gro
 
 | Priority | Feature | What It Does | Joy Factor | Status |
 |----------|---------|--------------|------------|--------|
-| 0 | Robo-Tomator Icon | Create a delightful robotic tomato mascot icon and set it as the app icon | Brand identity |
+| 0 | Robo-Tomator Icon | Create a delightful robotic tomato mascot icon and set it as the app icon | Brand identity | ✅ **COMPLETED** |
 | 1 | Permission Flow | Friendly onboarding that guides users through accessibility setup | Warm welcome | ✅ **COMPLETED** |
 | 2 | Main Navigation | Bottom nav: Automations, Create, Settings | Easy to find things | |
 | 3 | Empty State | Charming "no automations yet" screen with a nudge to create one | Inviting start | |

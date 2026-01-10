@@ -4,16 +4,110 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group
-        android:scaleX="0.5"
-        android:scaleY="0.5"
-        android:translateX="27"
-        android:translateY="27">
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M54,27c-7.45,0 -13.5,6.05 -13.5,13.5S46.55,54 54,54s13.5,-6.05 13.5,-13.5S61.45,27 54,27zM54,45c-2.48,0 -4.5,-2.02 -4.5,-4.5S51.52,36 54,36s4.5,2.02 4.5,4.5S56.48,45 54,45z" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M54,18c-19.88,0 -36,16.12 -36,36s16.12,36 36,36s36,-16.12 36,-36S73.88,18 54,18zM54,81c-14.91,0 -27,-12.09 -27,-27s12.09,-27 27,-27s27,12.09 27,27S68.91,81 54,81z" />
-    </group>
+
+    <!-- Robo-Tomator Icon - Foreground Layer -->
+    <!-- A delightful robotic tomato mascot -->
+
+    <!-- Main tomato body (red, round) -->
+    <path
+        android:fillColor="#E74C3C"
+        android:pathData="M54,32 C65.046,32 74,40.954 74,52 C74,63.046 65.046,72 54,72 C42.954,72 34,63.046 34,52 C34,40.954 42.954,32 54,32 Z" />
+
+    <!-- Highlight/shine on tomato -->
+    <path
+        android:fillColor="#F39C12"
+        android:fillAlpha="0.3"
+        android:pathData="M50,38 C54,38 58,40 58,44 C58,46 56,48 54,48 C52,48 48,46 48,42 C48,40 48,38 50,38 Z" />
+
+    <!-- Tomato stem/top (green) -->
+    <path
+        android:strokeColor="#27AE60"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,28 L54,34 M50,30 L50,34 M58,30 L58,34" />
+
+    <!-- Stem leaves -->
+    <path
+        android:fillColor="#27AE60"
+        android:pathData="M48,30 C46,28 44,28 44,30 C44,32 46,32 48,30 Z" />
+    <path
+        android:fillColor="#27AE60"
+        android:pathData="M60,30 C62,28 64,28 64,30 C64,32 62,32 60,30 Z" />
+
+    <!-- Robot antenna (metallic) -->
+    <path
+        android:strokeColor="#95A5A6"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M54,24 L54,28" />
+
+    <!-- Antenna ball -->
+    <path
+        android:fillColor="#3498DB"
+        android:pathData="M52,22 C52,20.895 52.895,20 54,20 C55.105,20 56,20.895 56,22 C56,23.105 55.105,24 54,24 C52.895,24 52,23.105 52,22 Z" />
+
+    <!-- Left friendly robot eye -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M45,48 C45,45.791 46.791,44 49,44 C51.209,44 53,45.791 53,48 C53,50.209 51.209,52 49,52 C46.791,52 45,50.209 45,48 Z" />
+
+    <!-- Left eye pupil -->
+    <path
+        android:fillColor="#2C3E50"
+        android:pathData="M47.5,48 C47.5,46.619 48.619,45.5 50,45.5 C51.381,45.5 52.5,46.619 52.5,48 C52.5,49.381 51.381,50.5 50,50.5 C48.619,50.5 47.5,49.381 47.5,48 Z" />
+
+    <!-- Left eye highlight -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M49,46 C49,45.448 49.448,45 50,45 C50.552,45 51,45.448 51,46 C51,46.552 50.552,47 50,47 C49.448,47 49,46.552 49,46 Z" />
+
+    <!-- Right friendly robot eye -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,48 C55,45.791 56.791,44 59,44 C61.209,44 63,45.791 63,48 C63,50.209 61.209,52 59,52 C56.791,52 55,50.209 55,48 Z" />
+
+    <!-- Right eye pupil -->
+    <path
+        android:fillColor="#2C3E50"
+        android:pathData="M57.5,48 C57.5,46.619 58.619,45.5 60,45.5 C61.381,45.5 62.5,46.619 62.5,48 C62.5,49.381 61.381,50.5 60,50.5 C58.619,50.5 57.5,49.381 57.5,48 Z" />
+
+    <!-- Right eye highlight -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M59,46 C59,45.448 59.448,45 60,45 C60.552,45 61,45.448 61,46 C61,46.552 60.552,47 60,47 C59.448,47 59,46.552 59,46 Z" />
+
+    <!-- Friendly smile (curved line) -->
+    <path
+        android:strokeColor="#2C3E50"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M46,58 Q54,64 62,58" />
+
+    <!-- Mechanical detail - left gear/screw -->
+    <path
+        android:fillColor="#95A5A6"
+        android:pathData="M38,52 C38,50.895 38.895,50 40,50 C41.105,50 42,50.895 42,52 C42,53.105 41.105,54 40,54 C38.895,54 38,53.105 38,52 Z" />
+
+    <!-- Mechanical detail - right gear/screw -->
+    <path
+        android:fillColor="#95A5A6"
+        android:pathData="M66,52 C66,50.895 66.895,50 68,50 C69.105,50 70,50.895 70,52 C70,53.105 69.105,54 68,54 C66.895,54 66,53.105 66,52 Z" />
+
+    <!-- Bottom panel line (robotic segmentation) -->
+    <path
+        android:strokeColor="#C0392B"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M38,65 L70,65" />
+
+    <!-- Tiny rivets/screws on bottom panel -->
+    <path
+        android:fillColor="#95A5A6"
+        android:pathData="M42,65 C42,64.448 42.448,64 43,64 C43.552,64 44,64.448 44,65 C44,65.552 43.552,66 43,66 C42.448,66 42,65.552 42,65 Z" />
+    <path
+        android:fillColor="#95A5A6"
+        android:pathData="M53,65 C53,64.448 53.448,64 54,64 C54.552,64 55,64.448 55,65 C55,65.552 54.552,66 54,66 C53.448,66 53,65.552 53,65 Z" />
+    <path
+        android:fillColor="#95A5A6"
+        android:pathData="M64,65 C64,64.448 64.448,64 65,64 C65.552,64 66,64.448 66,65 C66,65.552 65.552,66 65,66 C64.448,66 64,65.552 64,65 Z" />
 </vector>
