@@ -356,6 +356,538 @@ class ScreenRepresentationTest {
         assertTrue(element.children.isEmpty())
     }
 
+    @Test
+    fun testHierarchicalTextSimpleElement() {
+        // Test a simple single element screen
+        val element = ScreenElement(
+            text = "Click me",
+            contentDescription = null,
+            className = "android.widget.Button",
+            viewIdResourceName = "com.example:id/submit",
+            bounds = Rect(0, 0, 100, 50),
+            isClickable = true,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = false,
+            isFocusable = false,
+            isFocused = false,
+            isPassword = false,
+            children = emptyList(),
+            depth = 0
+        )
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = "com.example.app.MainActivity",
+            rootElement = element,
+            timestamp = 12345L
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Verify header
+        assertTrue(hierarchicalText.contains("App: com.example.app (com.example.app.MainActivity)"))
+        assertTrue(hierarchicalText.contains("Window: APPLICATION"))
+
+        // Verify element representation
+        assertTrue(hierarchicalText.contains("[0] Button"))
+        assertTrue(hierarchicalText.contains("text='Click me'"))
+        assertTrue(hierarchicalText.contains("id='com.example:id/submit'"))
+        assertTrue(hierarchicalText.contains("[clickable]"))
+    }
+
+    @Test
+    fun testHierarchicalTextNestedElements() {
+        // Create a nested structure:
+        // Root (View)
+        //   ├─ Child1 (Button)
+        //   └─ Child2 (EditText)
+        val child1 = ScreenElement(
+            text = "Submit",
+            contentDescription = null,
+            className = "android.widget.Button",
+            viewIdResourceName = "com.example:id/submit",
+            bounds = Rect(0, 0, 100, 50),
+            isClickable = true,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = false,
+            isFocusable = false,
+            isFocused = false,
+            isPassword = false,
+            children = emptyList(),
+            depth = 1
+        )
+
+        val child2 = ScreenElement(
+            text = null,
+            contentDescription = "Email input",
+            className = "android.widget.EditText",
+            viewIdResourceName = "com.example:id/email",
+            bounds = Rect(0, 60, 200, 100),
+            isClickable = true,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = true,
+            isFocusable = true,
+            isFocused = false,
+            isPassword = false,
+            children = emptyList(),
+            depth = 1
+        )
+
+        val root = ScreenElement(
+            text = null,
+            contentDescription = null,
+            className = "android.view.View",
+            viewIdResourceName = null,
+            bounds = Rect(0, 0, 400, 400),
+            isClickable = false,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = false,
+            isFocusable = false,
+            isFocused = false,
+            isPassword = false,
+            children = listOf(child1, child2),
+            depth = 0
+        )
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = root,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Verify structure
+        assertTrue(hierarchicalText.contains("[0] View"))
+        assertTrue(hierarchicalText.contains("[0.0] Button"))
+        assertTrue(hierarchicalText.contains("[0.1] EditText"))
+
+        // Verify properties
+        assertTrue(hierarchicalText.contains("text='Submit'"))
+        assertTrue(hierarchicalText.contains("desc='Email input'"))
+        assertTrue(hierarchicalText.contains("id='com.example:id/submit'"))
+        assertTrue(hierarchicalText.contains("id='com.example:id/email'"))
+
+        // Verify indentation (child elements should have leading spaces)
+        val lines = hierarchicalText.lines()
+        val buttonLine = lines.first { it.contains("[0.0] Button") }
+        assertTrue(buttonLine.startsWith("  ")) // Should be indented
+
+        val editTextLine = lines.first { it.contains("[0.1] EditText") }
+        assertTrue(editTextLine.startsWith("  ")) // Should be indented
+    }
+
+    @Test
+    fun testHierarchicalTextDeeplyNested() {
+        // Create a 3-level deep tree
+        val grandchild = ScreenElement(
+            text = "Leaf",
+            contentDescription = null,
+            className = "android.widget.TextView",
+            viewIdResourceName = null,
+            bounds = Rect(0, 0, 50, 20),
+            isClickable = false,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = false,
+            isFocusable = false,
+            isFocused = false,
+            isPassword = false,
+            children = emptyList(),
+            depth = 2
+        )
+
+        val child = ScreenElement(
+            text = "Middle",
+            contentDescription = null,
+            className = "android.widget.LinearLayout",
+            viewIdResourceName = null,
+            bounds = Rect(0, 0, 100, 50),
+            isClickable = false,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = false,
+            isFocusable = false,
+            isFocused = false,
+            isPassword = false,
+            children = listOf(grandchild),
+            depth = 1
+        )
+
+        val root = ScreenElement(
+            text = "Root",
+            contentDescription = null,
+            className = "android.widget.FrameLayout",
+            viewIdResourceName = null,
+            bounds = Rect(0, 0, 400, 400),
+            isClickable = false,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = false,
+            isFocusable = false,
+            isFocused = false,
+            isPassword = false,
+            children = listOf(child),
+            depth = 0
+        )
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = root,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Verify nested index paths
+        assertTrue(hierarchicalText.contains("[0] FrameLayout"))
+        assertTrue(hierarchicalText.contains("[0.0] LinearLayout"))
+        assertTrue(hierarchicalText.contains("[0.0.0] TextView"))
+
+        // Verify indentation levels
+        val lines = hierarchicalText.lines()
+        val rootLine = lines.first { it.contains("[0] FrameLayout") }
+        val childLine = lines.first { it.contains("[0.0] LinearLayout") }
+        val grandchildLine = lines.first { it.contains("[0.0.0] TextView") }
+
+        // Count leading spaces
+        assertFalse(rootLine.startsWith(" ")) // No indentation
+        assertTrue(childLine.startsWith("  ")) // 2 spaces
+        assertTrue(grandchildLine.startsWith("    ")) // 4 spaces
+    }
+
+    @Test
+    fun testHierarchicalTextPasswordField() {
+        // Password fields should be marked appropriately
+        val passwordElement = ScreenElement(
+            text = null,
+            contentDescription = "Password",
+            className = "android.widget.EditText",
+            viewIdResourceName = "com.example:id/password",
+            bounds = Rect(0, 0, 200, 50),
+            isClickable = true,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = true,
+            isFocusable = true,
+            isFocused = false,
+            isPassword = true,
+            children = emptyList(),
+            depth = 0
+        )
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = passwordElement,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Verify password attribute is shown
+        assertTrue(hierarchicalText.contains("password"))
+        assertTrue(hierarchicalText.contains("editable"))
+        // Verify attributes are in brackets
+        assertTrue(hierarchicalText.contains("[") && hierarchicalText.contains("]"))
+    }
+
+    @Test
+    fun testHierarchicalTextDisabledElement() {
+        val disabledElement = ScreenElement(
+            text = "Disabled Button",
+            contentDescription = null,
+            className = "android.widget.Button",
+            viewIdResourceName = null,
+            bounds = Rect(0, 0, 100, 50),
+            isClickable = false,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = false, // Disabled
+            isScrollable = false,
+            isEditable = false,
+            isFocusable = false,
+            isFocused = false,
+            isPassword = false,
+            children = emptyList(),
+            depth = 0
+        )
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = disabledElement,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Verify disabled attribute is shown
+        assertTrue(hierarchicalText.contains("disabled"))
+    }
+
+    @Test
+    fun testHierarchicalTextAllAttributes() {
+        // Test an element with all attributes
+        val element = ScreenElement(
+            text = "Complex Element",
+            contentDescription = "Description",
+            className = "android.widget.CheckBox",
+            viewIdResourceName = "com.example:id/checkbox",
+            bounds = Rect(0, 0, 100, 50),
+            isClickable = true,
+            isCheckable = true,
+            isChecked = true,
+            isEnabled = true,
+            isScrollable = true,
+            isEditable = false,
+            isFocusable = true,
+            isFocused = true,
+            isPassword = false,
+            children = emptyList(),
+            depth = 0
+        )
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = element,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Verify all attributes are present
+        assertTrue(hierarchicalText.contains("clickable"))
+        assertTrue(hierarchicalText.contains("checkable"))
+        assertTrue(hierarchicalText.contains("checked"))
+        assertTrue(hierarchicalText.contains("scrollable"))
+        assertTrue(hierarchicalText.contains("focused"))
+    }
+
+    @Test
+    fun testHierarchicalTextNoPackageName() {
+        // Test handling when package name is null
+        val element = createSimpleElement(depth = 0)
+        val screen = ScreenRepresentation(
+            windowType = WindowType.SYSTEM,
+            packageName = null,
+            activityName = null,
+            rootElement = element,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Should not crash and should show window type
+        assertTrue(hierarchicalText.contains("Window: SYSTEM"))
+        assertFalse(hierarchicalText.contains("App:"))
+    }
+
+    @Test
+    fun testHierarchicalTextSimplifiedClassNames() {
+        // Test that class names are simplified (last segment only)
+        val element = ScreenElement(
+            text = "Test",
+            contentDescription = null,
+            className = "android.widget.Button",
+            viewIdResourceName = null,
+            bounds = Rect(0, 0, 100, 50),
+            isClickable = true,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = false,
+            isFocusable = false,
+            isFocused = false,
+            isPassword = false,
+            children = emptyList(),
+            depth = 0
+        )
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = element,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Should show "Button" not "android.widget.Button"
+        assertTrue(hierarchicalText.contains("[0] Button"))
+        assertFalse(hierarchicalText.contains("android.widget.Button"))
+    }
+
+    @Test
+    fun testHierarchicalTextEmptyTextFiltered() {
+        // Test that empty strings are not included in output
+        val element = ScreenElement(
+            text = "",
+            contentDescription = "",
+            className = "android.widget.View",
+            viewIdResourceName = null,
+            bounds = Rect(0, 0, 100, 50),
+            isClickable = false,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = false,
+            isFocusable = false,
+            isFocused = false,
+            isPassword = false,
+            children = emptyList(),
+            depth = 0
+        )
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = element,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Should not contain empty text or desc attributes
+        assertFalse(hierarchicalText.contains("text=''"))
+        assertFalse(hierarchicalText.contains("desc=''"))
+    }
+
+    @Test
+    fun testHierarchicalTextMultipleSiblings() {
+        // Test a parent with multiple children at the same level
+        val child1 = createSimpleElement(depth = 1, text = "Child 1")
+        val child2 = createSimpleElement(depth = 1, text = "Child 2")
+        val child3 = createSimpleElement(depth = 1, text = "Child 3")
+        val root = createSimpleElement(depth = 0, text = "Root", children = listOf(child1, child2, child3))
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = root,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Verify all siblings have correct indices
+        assertTrue(hierarchicalText.contains("[0.0]"))
+        assertTrue(hierarchicalText.contains("[0.1]"))
+        assertTrue(hierarchicalText.contains("[0.2]"))
+
+        // Verify texts
+        assertTrue(hierarchicalText.contains("text='Child 1'"))
+        assertTrue(hierarchicalText.contains("text='Child 2'"))
+        assertTrue(hierarchicalText.contains("text='Child 3'"))
+    }
+
+    @Test
+    fun testHierarchicalTextPasswordSecurityNoTextLeakage() {
+        // Security test: verify that password field text is NEVER included even if present
+        val passwordElement = ScreenElement(
+            text = "supersecretpassword123", // Should be filtered out
+            contentDescription = "Password input",
+            className = "android.widget.EditText",
+            viewIdResourceName = "com.example:id/password",
+            bounds = Rect(0, 0, 200, 50),
+            isClickable = true,
+            isCheckable = false,
+            isChecked = false,
+            isEnabled = true,
+            isScrollable = false,
+            isEditable = true,
+            isFocusable = true,
+            isFocused = false,
+            isPassword = true,
+            children = emptyList(),
+            depth = 0
+        )
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = passwordElement,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // CRITICAL SECURITY CHECK: Password text must not appear in output
+        assertFalse(hierarchicalText.contains("supersecretpassword123"))
+        assertFalse(hierarchicalText.contains("text="))
+
+        // But password attribute should still be present
+        assertTrue(hierarchicalText.contains("password"))
+
+        // Content description is OK (it's typically like "Password field")
+        assertTrue(hierarchicalText.contains("desc='Password input'"))
+    }
+
+    @Test
+    fun testHierarchicalTextMaxDepthProtection() {
+        // Test that deeply nested trees don't cause stack overflow
+        // Create a pathologically deep tree (200 levels) that exceeds maxDepth (100)
+        var deepestChild = createSimpleElement(depth = 200, text = "Level 200")
+        for (i in 199 downTo 0) {
+            deepestChild = createSimpleElement(depth = i, text = "Level $i", children = listOf(deepestChild))
+        }
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = deepestChild,
+            timestamp = System.currentTimeMillis()
+        )
+
+        // Should not throw StackOverflowError
+        val hierarchicalText = screen.toHierarchicalText()
+
+        // Should contain the max depth warning message
+        assertTrue(hierarchicalText.contains("max depth reached"))
+
+        // Should contain early levels
+        assertTrue(hierarchicalText.contains("text='Level 0'"))
+
+        // Should NOT contain the deepest levels (they're beyond maxDepth)
+        assertFalse(hierarchicalText.contains("text='Level 200'"))
+    }
+
     // Helper function to create simple test elements
     private fun createSimpleElement(
         depth: Int,

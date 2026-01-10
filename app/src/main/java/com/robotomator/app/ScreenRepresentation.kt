@@ -139,3 +139,125 @@ sealed class ScreenReadResult {
     /** Error occurred while reading */
     data class Error(val message: String) : ScreenReadResult()
 }
+
+/**
+ * Converts this screen representation to a hierarchical text format optimized for LLM consumption.
+ *
+ * The format uses indentation to show hierarchy and includes key element properties
+ * in a concise, parseable format. This representation is designed to:
+ * - Be easily understood by language models
+ * - Minimize token usage while preserving important information
+ * - Show the logical structure of the UI hierarchy
+ *
+ * Example output:
+ * ```
+ * App: com.example.app (MainActivity)
+ * Window: APPLICATION
+ *
+ * [0] View
+ *   [1] Button text='Submit' id='com.example:id/submit' [clickable, enabled]
+ *   [2] EditText desc='Password field' [editable, password, focusable]
+ * ```
+ *
+ * @return A multi-line string representation of the screen hierarchy
+ */
+fun ScreenRepresentation.toHierarchicalText(): String {
+    val builder = StringBuilder()
+
+    // Add header information
+    if (packageName != null) {
+        builder.append("App: $packageName")
+        if (activityName != null) {
+            builder.append(" ($activityName)")
+        }
+        builder.append("\n")
+    }
+
+    builder.append("Window: $windowType\n")
+    builder.append("\n")
+
+    // Add the element tree
+    rootElement.appendHierarchicalText(builder, indent = 0, indexPath = mutableListOf(0))
+
+    return builder.toString()
+}
+
+/**
+ * Appends this element and its children to the builder in hierarchical text format.
+ *
+ * Uses indentation to show nesting level. Each element is represented on its own line
+ * with an index path (for addressing), followed by key properties.
+ *
+ * @param builder The StringBuilder to append to
+ * @param indent The current indentation level (number of spaces = indent * 2)
+ * @param indexPath The path of indices from root to this element
+ * @param maxDepth Maximum depth to traverse (prevents stack overflow on pathological trees)
+ */
+private fun ScreenElement.appendHierarchicalText(
+    builder: StringBuilder,
+    indent: Int,
+    indexPath: MutableList<Int>,
+    maxDepth: Int = 100
+) {
+    // Depth limit protection against pathologically deep trees
+    if (indent >= maxDepth) {
+        repeat(indent) { builder.append("  ") }
+        builder.append("[${indexPath.joinToString(".")}] ... (max depth reached)\n")
+        return
+    }
+    // Add indentation
+    repeat(indent) { builder.append("  ") }
+
+    // Add index path for addressability
+    builder.append("[${indexPath.joinToString(".")}] ")
+
+    // Add class name (simplified)
+    val simpleClassName = className?.substringAfterLast('.') ?: "View"
+    builder.append(simpleClassName)
+
+    // Add key identifying properties
+    val properties = mutableListOf<String>()
+
+    // Never include text content for password fields (security)
+    text?.takeIf { it.isNotBlank() && !isPassword }?.let {
+        properties.add("text='$it'")
+    }
+
+    contentDescription?.takeIf { it.isNotBlank() }?.let {
+        properties.add("desc='$it'")
+    }
+
+    viewIdResourceName?.let {
+        properties.add("id='$it'")
+    }
+
+    // Add properties inline
+    if (properties.isNotEmpty()) {
+        builder.append(" ")
+        builder.append(properties.joinToString(" "))
+    }
+
+    // Add interaction attributes in brackets
+    val attributes = mutableListOf<String>()
+    if (isClickable) attributes.add("clickable")
+    if (isCheckable) attributes.add("checkable")
+    if (isChecked) attributes.add("checked")
+    if (isScrollable) attributes.add("scrollable")
+    if (isEditable) attributes.add("editable")
+    if (isFocused) attributes.add("focused")
+    if (isPassword) attributes.add("password")
+    if (!isEnabled) attributes.add("disabled")
+
+    if (attributes.isNotEmpty()) {
+        builder.append(" [${attributes.joinToString(", ")}]")
+    }
+
+    builder.append("\n")
+
+    // Recursively add children with updated index path
+    children.forEachIndexed { index, child ->
+        indexPath.add(index)
+        child.appendHierarchicalText(builder, indent + 1, indexPath, maxDepth)
+        indexPath.removeAt(indexPath.size - 1)
+    }
+}
