@@ -888,6 +888,401 @@ class ScreenRepresentationTest {
         assertFalse(hierarchicalText.contains("text='Level 200'"))
     }
 
+    @Test
+    fun testElementAddressParsing() {
+        // Test valid address strings
+        val address1 = ElementAddress.parse("0")
+        assertNotNull(address1)
+        assertEquals(listOf(0), address1?.path)
+
+        val address2 = ElementAddress.parse("0.1.2")
+        assertNotNull(address2)
+        assertEquals(listOf(0, 1, 2), address2?.path)
+
+        val address3 = ElementAddress.parse("0.0.0.0")
+        assertNotNull(address3)
+        assertEquals(listOf(0, 0, 0, 0), address3?.path)
+    }
+
+    @Test
+    fun testElementAddressParsingInvalidFormat() {
+        // Test invalid formats
+        assertNull(ElementAddress.parse(""))
+        assertNull(ElementAddress.parse("abc"))
+        assertNull(ElementAddress.parse("0.1.x"))
+        assertNull(ElementAddress.parse("0..1"))
+        assertNull(ElementAddress.parse(".0.1"))
+    }
+
+    @Test
+    fun testElementAddressParsingNegativeIndices() {
+        // Negative indices should be rejected
+        assertNull(ElementAddress.parse("-1"))
+        assertNull(ElementAddress.parse("0.-1.2"))
+    }
+
+    @Test
+    fun testElementAddressToString() {
+        val address = ElementAddress(listOf(0, 1, 2))
+        assertEquals("0.1.2", address.toString())
+
+        val rootAddress = ElementAddress(listOf(0))
+        assertEquals("0", rootAddress.toString())
+    }
+
+    @Test
+    fun testElementAddressRoot() {
+        assertEquals(listOf(0), ElementAddress.ROOT.path)
+        assertEquals("0", ElementAddress.ROOT.toString())
+    }
+
+    @Test
+    fun testFindElementByAddressRoot() {
+        // Test finding the root element
+        val element = createSimpleElement(depth = 0, text = "Root")
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = element,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val result = screen.findElement(ElementAddress.ROOT)
+        assertTrue(result is ElementLookupResult.Found)
+        val found = result as ElementLookupResult.Found
+        assertEquals("Root", found.element.text)
+        assertEquals("0", found.address.toString())
+    }
+
+    @Test
+    fun testFindElementByAddressString() {
+        // Test finding element using string address
+        val child1 = createSimpleElement(depth = 1, text = "Child 1")
+        val child2 = createSimpleElement(depth = 1, text = "Child 2")
+        val root = createSimpleElement(depth = 0, text = "Root", children = listOf(child1, child2))
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = root,
+            timestamp = System.currentTimeMillis()
+        )
+
+        // Find first child
+        val result1 = screen.findElement("0.0")
+        assertTrue(result1 is ElementLookupResult.Found)
+        assertEquals("Child 1", (result1 as ElementLookupResult.Found).element.text)
+
+        // Find second child
+        val result2 = screen.findElement("0.1")
+        assertTrue(result2 is ElementLookupResult.Found)
+        assertEquals("Child 2", (result2 as ElementLookupResult.Found).element.text)
+    }
+
+    @Test
+    fun testFindElementByAddressNested() {
+        // Test finding deeply nested elements
+        val grandchild1 = createSimpleElement(depth = 2, text = "GC1")
+        val grandchild2 = createSimpleElement(depth = 2, text = "GC2")
+        val child1 = createSimpleElement(depth = 1, text = "C1", children = listOf(grandchild1, grandchild2))
+        val child2 = createSimpleElement(depth = 1, text = "C2")
+        val root = createSimpleElement(depth = 0, text = "Root", children = listOf(child1, child2))
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = root,
+            timestamp = System.currentTimeMillis()
+        )
+
+        // Find first grandchild
+        val result1 = screen.findElement("0.0.0")
+        assertTrue(result1 is ElementLookupResult.Found)
+        assertEquals("GC1", (result1 as ElementLookupResult.Found).element.text)
+
+        // Find second grandchild
+        val result2 = screen.findElement("0.0.1")
+        assertTrue(result2 is ElementLookupResult.Found)
+        assertEquals("GC2", (result2 as ElementLookupResult.Found).element.text)
+
+        // Find second child (no grandchildren)
+        val result3 = screen.findElement("0.1")
+        assertTrue(result3 is ElementLookupResult.Found)
+        assertEquals("C2", (result3 as ElementLookupResult.Found).element.text)
+    }
+
+    @Test
+    fun testFindElementInvalidPath() {
+        // Test when path goes beyond tree depth
+        val child = createSimpleElement(depth = 1, text = "Child")
+        val root = createSimpleElement(depth = 0, text = "Root", children = listOf(child))
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = root,
+            timestamp = System.currentTimeMillis()
+        )
+
+        // Try to access child that doesn't exist
+        val result1 = screen.findElement("0.1")
+        assertTrue(result1 is ElementLookupResult.InvalidPath)
+        val invalidPath1 = result1 as ElementLookupResult.InvalidPath
+        assertEquals("0.1", invalidPath1.address.toString())
+        assertEquals(listOf(0), invalidPath1.failedAt)
+
+        // Try to access grandchild when there are no grandchildren
+        val result2 = screen.findElement("0.0.0")
+        assertTrue(result2 is ElementLookupResult.InvalidPath)
+        val invalidPath2 = result2 as ElementLookupResult.InvalidPath
+        assertEquals("0.0.0", invalidPath2.address.toString())
+        assertEquals(listOf(0, 0), invalidPath2.failedAt)
+    }
+
+    @Test
+    fun testFindElementInvalidFormat() {
+        val element = createSimpleElement(depth = 0)
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = element,
+            timestamp = System.currentTimeMillis()
+        )
+
+        // Test invalid address strings
+        val result1 = screen.findElement("abc")
+        assertTrue(result1 is ElementLookupResult.InvalidFormat)
+        assertEquals("abc", (result1 as ElementLookupResult.InvalidFormat).addressString)
+
+        val result2 = screen.findElement("")
+        assertTrue(result2 is ElementLookupResult.InvalidFormat)
+
+        val result3 = screen.findElement("0.x.2")
+        assertTrue(result3 is ElementLookupResult.InvalidFormat)
+    }
+
+    @Test
+    fun testGetAddressRoot() {
+        // Test getting address of root element
+        val element = createSimpleElement(depth = 0, text = "Root")
+
+        val address = element.getAddress()
+        assertNotNull(address)
+        assertEquals("0", address.toString())
+    }
+
+    @Test
+    fun testGetAddressChildren() {
+        // Test getting address of child elements
+        val child1 = createSimpleElement(depth = 1, text = "Child 1")
+        val child2 = createSimpleElement(depth = 1, text = "Child 2")
+        val root = createSimpleElement(depth = 0, text = "Root", children = listOf(child1, child2))
+
+        val address1 = child1.getAddress(root)
+        assertNotNull(address1)
+        assertEquals("0.0", address1.toString())
+
+        val address2 = child2.getAddress(root)
+        assertNotNull(address2)
+        assertEquals("0.1", address2.toString())
+    }
+
+    @Test
+    fun testGetAddressNested() {
+        // Test getting address of deeply nested elements
+        val grandchild1 = createSimpleElement(depth = 2, text = "GC1")
+        val grandchild2 = createSimpleElement(depth = 2, text = "GC2")
+        val child1 = createSimpleElement(depth = 1, text = "C1", children = listOf(grandchild1, grandchild2))
+        val child2 = createSimpleElement(depth = 1, text = "C2")
+        val root = createSimpleElement(depth = 0, text = "Root", children = listOf(child1, child2))
+
+        val address1 = grandchild1.getAddress(root)
+        assertNotNull(address1)
+        assertEquals("0.0.0", address1.toString())
+
+        val address2 = grandchild2.getAddress(root)
+        assertNotNull(address2)
+        assertEquals("0.0.1", address2.toString())
+
+        val address3 = child2.getAddress(root)
+        assertNotNull(address3)
+        assertEquals("0.1", address3.toString())
+    }
+
+    @Test
+    fun testGetAddressNotInTree() {
+        // Test when element is not in the provided root's tree
+        val orphan = createSimpleElement(depth = 1, text = "Orphan")
+        val root = createSimpleElement(depth = 0, text = "Root")
+
+        val address = orphan.getAddress(root)
+        assertNull(address)
+    }
+
+    @Test
+    fun testFindElementRoundTrip() {
+        // Test that we can find an element, get its address, and find it again
+        val child1 = createSimpleElement(depth = 1, text = "Child 1")
+        val child2 = createSimpleElement(depth = 1, text = "Child 2")
+        val root = createSimpleElement(depth = 0, text = "Root", children = listOf(child1, child2))
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = root,
+            timestamp = System.currentTimeMillis()
+        )
+
+        // Find child2
+        val result1 = screen.findElement("0.1")
+        assertTrue(result1 is ElementLookupResult.Found)
+        val foundElement = (result1 as ElementLookupResult.Found).element
+
+        // Get its address
+        val address = foundElement.getAddress(root)
+        assertNotNull(address)
+        assertEquals("0.1", address.toString())
+
+        // Find it again using that address
+        val result2 = screen.findElement(address!!)
+        assertTrue(result2 is ElementLookupResult.Found)
+        assertEquals("Child 2", (result2 as ElementLookupResult.Found).element.text)
+    }
+
+    @Test
+    fun testElementAddressEquality() {
+        val address1 = ElementAddress(listOf(0, 1, 2))
+        val address2 = ElementAddress(listOf(0, 1, 2))
+        val address3 = ElementAddress(listOf(0, 1, 3))
+
+        // Test equality
+        assertEquals(address1, address2)
+        assertNotEquals(address1, address3)
+
+        // Test hash code
+        assertEquals(address1.hashCode(), address2.hashCode())
+    }
+
+    @Test
+    fun testFindElementByAddressComplex() {
+        // Test a more complex tree structure
+        //       root
+        //      /    \
+        //    c1      c2
+        //   /  \      |
+        // gc1  gc2   gc3
+        val grandchild1 = createSimpleElement(depth = 2, text = "GC1")
+        val grandchild2 = createSimpleElement(depth = 2, text = "GC2")
+        val grandchild3 = createSimpleElement(depth = 2, text = "GC3")
+        val child1 = createSimpleElement(depth = 1, text = "C1", children = listOf(grandchild1, grandchild2))
+        val child2 = createSimpleElement(depth = 1, text = "C2", children = listOf(grandchild3))
+        val root = createSimpleElement(depth = 0, text = "Root", children = listOf(child1, child2))
+
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = root,
+            timestamp = System.currentTimeMillis()
+        )
+
+        // Test all valid paths
+        val tests = mapOf(
+            "0" to "Root",
+            "0.0" to "C1",
+            "0.1" to "C2",
+            "0.0.0" to "GC1",
+            "0.0.1" to "GC2",
+            "0.1.0" to "GC3"
+        )
+
+        tests.forEach { (addressString, expectedText) ->
+            val result = screen.findElement(addressString)
+            assertTrue("Failed to find $addressString", result is ElementLookupResult.Found)
+            assertEquals(
+                "Wrong element for $addressString",
+                expectedText,
+                (result as ElementLookupResult.Found).element.text
+            )
+        }
+
+        // Test invalid paths
+        val invalidPaths = listOf("0.2", "0.0.2", "0.1.1", "0.0.0.0")
+        invalidPaths.forEach { addressString ->
+            val result = screen.findElement(addressString)
+            assertTrue("$addressString should be invalid", result is ElementLookupResult.InvalidPath)
+        }
+    }
+
+    @Test
+    fun testGetAddressComplex() {
+        // Test getting addresses for all elements in a complex tree
+        val grandchild1 = createSimpleElement(depth = 2, text = "GC1")
+        val grandchild2 = createSimpleElement(depth = 2, text = "GC2")
+        val grandchild3 = createSimpleElement(depth = 2, text = "GC3")
+        val child1 = createSimpleElement(depth = 1, text = "C1", children = listOf(grandchild1, grandchild2))
+        val child2 = createSimpleElement(depth = 1, text = "C2", children = listOf(grandchild3))
+        val root = createSimpleElement(depth = 0, text = "Root", children = listOf(child1, child2))
+
+        // Test all elements
+        assertEquals("0", root.getAddress(root).toString())
+        assertEquals("0.0", child1.getAddress(root).toString())
+        assertEquals("0.1", child2.getAddress(root).toString())
+        assertEquals("0.0.0", grandchild1.getAddress(root).toString())
+        assertEquals("0.0.1", grandchild2.getAddress(root).toString())
+        assertEquals("0.1.0", grandchild3.getAddress(root).toString())
+    }
+
+    @Test
+    fun testFindElementDepthLimitProtection() {
+        // Test that addresses with paths exceeding MAX_TREE_DEPTH are rejected
+        val root = createSimpleElement(depth = 0, text = "Root")
+        val screen = ScreenRepresentation(
+            windowType = WindowType.APPLICATION,
+            packageName = "com.example.app",
+            activityName = null,
+            rootElement = root,
+            timestamp = System.currentTimeMillis()
+        )
+
+        // Create an address with 101 indices (exceeds MAX_TREE_DEPTH of 100)
+        val deepPath = (0..100).toList()
+        val deepAddress = ElementAddress(deepPath)
+
+        val result = screen.findElement(deepAddress)
+        assertTrue("Deep address should be rejected", result is ElementLookupResult.InvalidPath)
+    }
+
+    @Test
+    fun testGetAddressDepthLimitProtection() {
+        // Test that getAddress() handles pathologically deep trees gracefully
+        // Build a chain of 105 elements (exceeds MAX_TREE_DEPTH of 100)
+        var current = createSimpleElement(depth = 104, text = "Leaf")
+        for (i in 103 downTo 0) {
+            current = createSimpleElement(depth = i, text = "Node$i", children = listOf(current))
+        }
+        val root = current
+
+        // Navigate deep into the tree to get the leaf
+        var deepNode = root
+        for (i in 0 until 105) {
+            if (deepNode.children.isEmpty()) break
+            deepNode = deepNode.children[0]
+        }
+
+        // Try to get address of the deep element (should fail gracefully due to depth limit)
+        val address = deepNode.getAddress(root)
+
+        // Should return null since depth limit is exceeded
+        assertNull("Address lookup should fail gracefully for deep trees", address)
+    }
+
     // Helper function to create simple test elements
     private fun createSimpleElement(
         depth: Int,

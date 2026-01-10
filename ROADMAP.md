@@ -47,7 +47,7 @@ The journey ahead is organized by what can be built in parallel. Within each gro
 | Priority | Feature | What It Does | Joy Factor | Status |
 |----------|---------|--------------|------------|--------|
 | 1 | Hierarchical Text Format | Convert the messy accessibility tree into clean, indented text that LLMs love | AI-readable vision | ✅ **COMPLETED** |
-| 2 | Element Addressing | Give every element a unique address - like GPS coordinates for buttons | Find anything |
+| 2 | Element Addressing | Give every element a unique address - like GPS coordinates for buttons | Find anything | ✅ **COMPLETED** |
 | 3 | Element Properties | Track what's clickable, checkable, scrollable - the personality traits of each element | Know your buttons |
 | 4 | Selector Language | Build a mini-CSS for Android: `Button:text("Submit")`, `#login_btn`, `[clickable]` | Elegant targeting |
 | 5 | Selector Resilience | Prefer stable selectors (IDs, unique text) over brittle ones (indexes) | Future-proof scripts |

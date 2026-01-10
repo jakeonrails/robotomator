@@ -183,6 +183,200 @@ fun ScreenRepresentation.toHierarchicalText(): String {
 }
 
 /**
+ * Maximum depth for tree traversal operations to prevent stack overflow.
+ * Android UI hierarchies rarely exceed 20-30 levels; 100 provides ample safety margin.
+ */
+private const val MAX_TREE_DEPTH = 100
+
+/**
+ * Represents the address of an element in the screen hierarchy.
+ *
+ * An element address is a dot-separated path of indices from the root element
+ * to the target element, similar to an XPath but using simple integer indices.
+ *
+ * Examples:
+ * - "0" = root element
+ * - "0.1" = second child of root
+ * - "0.1.2" = third child of second child of root
+ *
+ * @property path The list of indices from root to this element
+ */
+data class ElementAddress(val path: List<Int>) {
+    /**
+     * Returns the string representation of this address.
+     * Example: [0, 1, 2] -> "0.1.2"
+     */
+    override fun toString(): String = path.joinToString(".")
+
+    companion object {
+        /**
+         * Parses an address string into an ElementAddress.
+         * Example: "0.1.2" -> ElementAddress([0, 1, 2])
+         *
+         * @param addressString The address string to parse
+         * @return The parsed ElementAddress, or null if invalid format
+         */
+        fun parse(addressString: String): ElementAddress? {
+            if (addressString.isBlank()) return null
+
+            return try {
+                val indices = addressString.split(".").map { it.toInt() }
+                if (indices.any { it < 0 }) null else ElementAddress(indices)
+            } catch (e: NumberFormatException) {
+                null
+            }
+        }
+
+        /**
+         * Creates an ElementAddress for the root element.
+         */
+        val ROOT = ElementAddress(listOf(0))
+    }
+}
+
+/**
+ * Result of attempting to find an element by address.
+ */
+sealed class ElementLookupResult {
+    /** Element was found successfully */
+    data class Found(val element: ScreenElement, val address: ElementAddress) : ElementLookupResult()
+
+    /** Address path is invalid (goes beyond tree depth) */
+    data class InvalidPath(val address: ElementAddress, val failedAt: List<Int>) : ElementLookupResult()
+
+    /** Address string could not be parsed */
+    data class InvalidFormat(val addressString: String) : ElementLookupResult()
+}
+
+/**
+ * Finds an element by its address in the screen hierarchy.
+ *
+ * @param address The address of the element to find
+ * @return The lookup result indicating success or failure reason
+ */
+fun ScreenRepresentation.findElement(address: ElementAddress): ElementLookupResult {
+    // Special handling: address path starts with 0 for the root element
+    // We need to verify the first index is 0, then process the rest
+    if (address.path.isEmpty()) {
+        return ElementLookupResult.InvalidPath(address, emptyList())
+    }
+
+    if (address.path.first() != 0) {
+        return ElementLookupResult.InvalidPath(address, emptyList())
+    }
+
+    // Depth limit protection - reject paths that are suspiciously deep
+    if (address.path.size > MAX_TREE_DEPTH) {
+        return ElementLookupResult.InvalidPath(address, emptyList())
+    }
+
+    // If the address is just "0", return the root element
+    if (address.path.size == 1) {
+        return ElementLookupResult.Found(rootElement, address)
+    }
+
+    // Otherwise, traverse from the root using the remaining path
+    return rootElement.findByPath(address.path.drop(1), address, listOf(0))
+}
+
+/**
+ * Finds an element by its address string.
+ *
+ * @param addressString The address string to parse and look up (e.g., "0.1.2")
+ * @return The lookup result indicating success or failure reason
+ */
+fun ScreenRepresentation.findElement(addressString: String): ElementLookupResult {
+    val address = ElementAddress.parse(addressString)
+        ?: return ElementLookupResult.InvalidFormat(addressString)
+    return findElement(address)
+}
+
+/**
+ * Internal helper to traverse the tree following the given path.
+ *
+ * @param path The remaining path to traverse (does NOT include the current element's index)
+ * @param originalAddress The full original address for error reporting
+ * @param currentPath The path we've successfully traversed so far
+ */
+private fun ScreenElement.findByPath(
+    path: List<Int>,
+    originalAddress: ElementAddress,
+    currentPath: List<Int>
+): ElementLookupResult {
+    // Base case: empty path means we've arrived at the target
+    if (path.isEmpty()) {
+        return ElementLookupResult.Found(this, originalAddress)
+    }
+
+    val nextIndex = path.first()
+    val remainingPath = path.drop(1)
+
+    // Check if the index is valid for this element's children
+    if (nextIndex >= children.size) {
+        // Return the path we successfully traversed
+        return ElementLookupResult.InvalidPath(originalAddress, currentPath)
+    }
+
+    // Recurse into the child
+    val nextPath = currentPath + nextIndex
+    return children[nextIndex].findByPath(remainingPath, originalAddress, nextPath)
+}
+
+/**
+ * Returns the address of this element within its tree.
+ *
+ * Note: This requires the element to maintain its position in the hierarchy.
+ * The address is computed based on the depth-first traversal order.
+ *
+ * @param rootElement The root element to compute path from (typically the screen root)
+ * @return The element address, or null if this element is not in the given root's tree
+ */
+fun ScreenElement.getAddress(rootElement: ScreenElement = this): ElementAddress? {
+    // If this element is the root, return root address
+    if (this === rootElement) {
+        return ElementAddress(listOf(0))
+    }
+
+    // Search for this element in the tree and build the path (with depth limit)
+    return rootElement.findPath(this, mutableListOf(0), maxDepth = MAX_TREE_DEPTH)
+}
+
+/**
+ * Internal helper to search for a target element and build its path.
+ *
+ * @param target The element to find
+ * @param currentPath The path built so far
+ * @param maxDepth Maximum depth to traverse (prevents stack overflow)
+ */
+private fun ScreenElement.findPath(
+    target: ScreenElement,
+    currentPath: MutableList<Int>,
+    maxDepth: Int = MAX_TREE_DEPTH
+): ElementAddress? {
+    // Check if we found the target
+    if (this === target) {
+        return ElementAddress(currentPath.toList())
+    }
+
+    // Depth limit protection
+    if (currentPath.size >= maxDepth) {
+        return null
+    }
+
+    // Recurse into children
+    children.forEachIndexed { index, child ->
+        currentPath.add(index)
+        val result = child.findPath(target, currentPath, maxDepth)
+        if (result != null) {
+            return result
+        }
+        currentPath.removeAt(currentPath.size - 1)
+    }
+
+    return null
+}
+
+/**
  * Appends this element and its children to the builder in hierarchical text format.
  *
  * Uses indentation to show nesting level. Each element is represented on its own line
@@ -197,7 +391,7 @@ private fun ScreenElement.appendHierarchicalText(
     builder: StringBuilder,
     indent: Int,
     indexPath: MutableList<Int>,
-    maxDepth: Int = 100
+    maxDepth: Int = MAX_TREE_DEPTH
 ) {
     // Depth limit protection against pathologically deep trees
     if (indent >= maxDepth) {
